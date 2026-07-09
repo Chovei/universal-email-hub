@@ -1,0 +1,48 @@
+# ── Dependencies ──────────────────────────────────────────────────────────
+node_modules/
+
+# ── Build outputs ─────────────────────────────────────────────────────────
+out/
+dist/
+
+# ── Generated icons (source.svg is tracked; binaries are generated in CI) ─
+resources/icons/icon.png
+resources/icons/icon.ico
+resources/icons/icon.icns
+
+# ── Logs ──────────────────────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+
+# ── Environment ───────────────────────────────────────────────────────────
+.env
+.env.local
+.env.*
+!.env.example
+
+# ── OS artefacts ──────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ───────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ── Test / coverage ───────────────────────────────────────────────────────
+coverage/
+test-results/
+playwright-report/
+blob-report/
+
+# ── Database (runtime, lives in userData not in project) ──────────────────
+*.db
+*.db-shm
+*.db-wal
+dev.db
+
+# ── electron-builder ──────────────────────────────────────────────────────
+app-update.yml

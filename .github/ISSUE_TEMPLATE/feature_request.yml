@@ -1,0 +1,42 @@
+name: Feature Request
+description: Suggest a new feature or improvement
+labels: [enhancement]
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the suggestion! Please describe it clearly below.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the problem or limitation you are experiencing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: Describe the feature you would like to see added.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Any alternative solutions or workarounds you have tried.
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - Nice to have
+        - Would significantly improve my workflow
+        - Blocking me from using the app
+    validations:
+      required: true

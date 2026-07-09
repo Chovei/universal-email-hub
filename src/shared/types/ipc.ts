@@ -1,0 +1,313 @@
+import type { ProviderKind } from '../constants/providers'
+import type { BasicCredentials } from './provider'
+import type {
+  AccountRow,
+  FolderRow,
+  MessageRow,
+  ThreadRow,
+  AttachmentRow,
+  SyncStatus,
+  SearchQuery,
+  SearchResult,
+  AppSettings,
+} from './db'
+
+// ── Generic IPC envelope ───────────────────────────────────────────────────
+
+export type IpcResult<T> = { data: T; error?: never } | { data?: never; error: IpcError }
+
+export interface IpcError {
+  code: string
+  message: string
+  details?: unknown
+}
+
+// ── Accounts ───────────────────────────────────────────────────────────────
+
+export interface AddAccountPayload {
+  provider: ProviderKind
+  credentials?: BasicCredentials
+}
+
+export interface UpdateAccountPayload {
+  displayName?: string
+  color?: string
+  isActive?: boolean
+  syncIntervalSeconds?: number
+  order?: number
+}
+
+export interface SyncStatusChangedPayload {
+  accountId: string
+  status: SyncStatus
+}
+
+// ── Folders ────────────────────────────────────────────────────────────────
+
+export interface ListFoldersPayload {
+  accountId: string
+}
+
+export interface UnreadChangedPayload {
+  folderId: string
+  count: number
+  accountId: string
+}
+
+// ── Messages ───────────────────────────────────────────────────────────────
+
+export interface ListMessagesPayload {
+  accountId?: string
+  folderId?: string
+  cursor?: string
+  limit?: number
+  unreadOnly?: boolean
+  starredOnly?: boolean
+  hasAttachment?: boolean
+  labels?: string[]
+  sortBy?: 'date'
+  sortOrder?: 'asc' | 'desc'
+}
+
+export interface ListMessagesResult {
+  threads: ThreadRow[]
+  cursor: string | null
+  hasMore: boolean
+}
+
+export interface GetMessagePayload {
+  messageId: string
+}
+
+export interface GetThreadPayload {
+  threadId: string
+}
+
+export interface GetThreadResult {
+  thread: ThreadRow
+  messages: (MessageRow & { attachments: AttachmentRow[] })[]
+}
+
+export interface MarkReadPayload {
+  messageIds: string[]
+  read: boolean
+}
+
+export interface StarPayload {
+  messageIds: string[]
+  starred: boolean
+}
+
+export interface MovePayload {
+  messageIds: string[]
+  targetFolderId: string
+}
+
+export interface DeletePayload {
+  messageIds: string[]
+  permanent?: boolean
+}
+
+export interface LabelPayload {
+  messageIds: string[]
+  label: string
+}
+
+export interface MessagesNewPayload {
+  threads: ThreadRow[]
+  accountId: string
+}
+
+export interface MessagesUpdatedPayload {
+  updates: Partial<ThreadRow>[]
+}
+
+// ── Compose ────────────────────────────────────────────────────────────────
+
+export interface SendPayload {
+  fromAccountId: string
+  to: { name?: string; address: string }[]
+  cc?: { name?: string; address: string }[]
+  bcc?: { name?: string; address: string }[]
+  subject: string
+  bodyHtml: string
+  attachmentPaths?: string[]
+  inReplyToRemoteId?: string
+  scheduledAt?: number
+}
+
+export interface SaveDraftPayload extends SendPayload {
+  remoteId?: string
+}
+
+export interface UploadAttachmentPayload {
+  accountId: string
+  filePath: string
+}
+
+export interface UploadAttachmentResult {
+  localPath: string
+  filename: string
+  mimeType: string
+  size: number
+}
+
+// ── Attachments ────────────────────────────────────────────────────────────
+
+export interface DownloadAttachmentPayload {
+  attachmentId: string
+}
+
+export interface DownloadAttachmentResult {
+  localPath: string
+}
+
+// ── Sync ───────────────────────────────────────────────────────────────────
+
+export interface SyncProgressPayload {
+  accountId: string
+  folderId?: string
+  message: string
+  progress: number
+}
+
+// ── Settings ───────────────────────────────────────────────────────────────
+
+export interface SettingsSetPayload {
+  key: string
+  value: unknown
+}
+
+// ── Plugin ─────────────────────────────────────────────────────────────────
+
+export interface PluginManifest {
+  id: string
+  name: string
+  version: string
+  description: string
+  author: string
+  entrypoint: string
+  permissions: string[]
+  allowedOrigins: string[]
+  hooks: string[]
+}
+
+// ── Updater ────────────────────────────────────────────────────────────────
+
+export type UpdateStatus =
+  | { type: 'checking' }
+  | { type: 'not-available' }
+  | { type: 'available'; version: string; releaseNotes?: string | null }
+  | { type: 'downloading'; progress: number }
+  | { type: 'downloaded'; version: string; releaseNotes?: string | null }
+  | { type: 'error'; error: string }
+
+export interface AppInfo {
+  version: string
+  isSafeMode: boolean
+}
+
+// ── The typed window.emailAPI surface ──────────────────────────────────────
+
+export interface EmailAPI {
+  // Accounts
+  accounts: {
+    list(): Promise<AccountRow[]>
+    add(payload: AddAccountPayload): Promise<AccountRow>
+    remove(accountId: string): Promise<void>
+    update(accountId: string, patch: UpdateAccountPayload): Promise<AccountRow>
+    reconnect(accountId: string): Promise<void>
+    reorder(accountIds: string[]): Promise<void>
+    /** Start OAuth flow in system browser; resolves when auth completes */
+    oauthStart(provider: 'gmail' | 'graph'): Promise<AccountRow>
+    onSyncStatusChanged(cb: (payload: SyncStatusChangedPayload) => void): () => void
+  }
+
+  // Folders
+  folders: {
+    list(accountId: string): Promise<FolderRow[]>
+    onUnreadChanged(cb: (payload: UnreadChangedPayload) => void): () => void
+  }
+
+  // Messages
+  messages: {
+    list(payload: ListMessagesPayload): Promise<ListMessagesResult>
+    getThread(threadId: string): Promise<GetThreadResult>
+    markRead(payload: MarkReadPayload): Promise<void>
+    star(payload: StarPayload): Promise<void>
+    move(payload: MovePayload): Promise<void>
+    delete(payload: DeletePayload): Promise<void>
+    addLabel(payload: LabelPayload): Promise<void>
+    removeLabel(payload: LabelPayload): Promise<void>
+    archive(messageIds: string[]): Promise<void>
+    onNew(cb: (payload: MessagesNewPayload) => void): () => void
+    onUpdated(cb: (payload: MessagesUpdatedPayload) => void): () => void
+    onDeleted(cb: (messageIds: string[]) => void): () => void
+  }
+
+  // Compose
+  compose: {
+    send(payload: SendPayload): Promise<{ remoteId: string }>
+    saveDraft(payload: SaveDraftPayload): Promise<{ remoteId: string }>
+    uploadAttachment(payload: UploadAttachmentPayload): Promise<UploadAttachmentResult>
+    deleteDraft(remoteId: string, accountId: string): Promise<void>
+  }
+
+  // Search
+  search: {
+    query(payload: SearchQuery): Promise<SearchResult[]>
+    suggest(partial: string): Promise<string[]>
+  }
+
+  // Sync
+  sync: {
+    force(accountId?: string): Promise<void>
+    getStatus(): Promise<Record<string, SyncStatus>>
+    pause(accountId: string): Promise<void>
+    resume(accountId: string): Promise<void>
+    onProgress(cb: (payload: SyncProgressPayload) => void): () => void
+  }
+
+  // Attachments
+  attachments: {
+    download(attachmentId: string): Promise<DownloadAttachmentResult>
+    open(localPath: string): Promise<void>
+    saveAs(attachmentId: string): Promise<void>
+  }
+
+  // Plugins
+  plugins: {
+    list(): Promise<PluginManifest[]>
+    install(manifestPath: string): Promise<PluginManifest>
+    uninstall(pluginId: string): Promise<void>
+  }
+
+  // Settings
+  settings: {
+    get(): Promise<AppSettings>
+    set(key: string, value: unknown): Promise<void>
+    reset(): Promise<void>
+  }
+
+  // Shell / OS
+  shell: {
+    openExternal(url: string): Promise<void>
+    openFile(localPath: string): Promise<void>
+    showOpenDialog(): Promise<string[]>
+  }
+
+  // Window
+  window: {
+    setBadge(count: number): Promise<void>
+    onBadgeCount(cb: (count: number) => void): () => void
+  }
+
+  // Auto-updater
+  updater: {
+    check(): Promise<void>
+    install(): Promise<void>
+    skipVersion(version: string): Promise<void>
+    getAppInfo(): Promise<AppInfo>
+    onStatus(cb: (status: UpdateStatus) => void): () => void
+  }
+}

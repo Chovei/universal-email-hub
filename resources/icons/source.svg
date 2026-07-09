@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%" stop-color="#818CF8"/>
+      <stop offset="100%" stop-color="#4338CA"/>
+    </linearGradient>
+  </defs>
+
+  <!-- App icon background with rounded corners -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+
+  <!-- Envelope body (white card) -->
+  <rect x="88" y="156" width="336" height="224" rx="16" fill="white" fill-opacity="0.95"/>
+
+  <!-- Envelope V-flap -->
+  <polyline
+    points="88,172 256,288 424,172"
+    fill="none"
+    stroke="#6366F1"
+    stroke-width="18"
+    stroke-linejoin="round"
+    stroke-linecap="round"
+  />
+
+  <!-- Envelope bottom-left crease (subtle) -->
+  <line x1="88" y1="380" x2="206" y2="270"
+        stroke="#6366F1" stroke-width="6" stroke-opacity="0.22" stroke-linecap="round"/>
+
+  <!-- Envelope bottom-right crease (subtle) -->
+  <line x1="424" y1="380" x2="306" y2="270"
+        stroke="#6366F1" stroke-width="6" stroke-opacity="0.22" stroke-linecap="round"/>
+</svg>

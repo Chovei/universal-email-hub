@@ -1,0 +1,88 @@
+appId: com.universalemailhub.app
+productName: Universal Email Hub
+copyright: Copyright © 2026 Universal Email Hub
+
+directories:
+  buildResources: resources
+  output: dist
+
+# Bundle all sources into an asar archive; unpack native modules so they load
+asar: true
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+  - "**/node_modules/@resvg/**"
+
+files:
+  - out/**/*
+  - "!**/*.map"
+
+extraMetadata:
+  main: out/main/index.js
+
+# ── Windows ────────────────────────────────────────────────────────────────
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - arm64
+  icon: resources/icons/icon.ico
+  signingHashAlgorithms:
+    - sha256
+
+nsis:
+  # One-click silent install with no UAC prompt; installs per-user to AppData
+  oneClick: true
+  perMachine: false
+  allowElevation: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Universal Email Hub
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true
+
+# ── macOS ──────────────────────────────────────────────────────────────────
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: resources/icons/icon.icns
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  entitlements: resources/entitlements.mac.plist
+  entitlementsInherit: resources/entitlements.mac.plist
+  notarize: false
+
+dmg:
+  title: Universal Email Hub
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+# ── Linux ──────────────────────────────────────────────────────────────────
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+        - arm64
+    - target: deb
+  icon: resources/icons/icon.png
+  category: Office
+
+# ── Publishing ─────────────────────────────────────────────────────────────
+publish:
+  provider: github
+  owner: Fatexxp
+  repo: universal-email-hub
+  releaseType: release
+
+electronUpdaterCompatibility: ">=2.16"
+
+npmRebuild: true
