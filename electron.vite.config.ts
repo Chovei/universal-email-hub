@@ -3,14 +3,25 @@ import { defineConfig, externalizeDepsPlugin } from 'electron-vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
+import { config as loadDotenv } from 'dotenv'
+loadDotenv()
+
 const isProd = process.env.NODE_ENV === 'production'
 const appVersion = JSON.stringify(process.env.npm_package_version ?? '0.0.0')
+
+const oauthDefines = {
+  'process.env.GMAIL_CLIENT_ID': JSON.stringify(process.env.GMAIL_CLIENT_ID ?? ''),
+  'process.env.GMAIL_CLIENT_SECRET': JSON.stringify(process.env.GMAIL_CLIENT_SECRET ?? ''),
+  'process.env.GRAPH_CLIENT_ID': JSON.stringify(process.env.GRAPH_CLIENT_ID ?? ''),
+  'process.env.GRAPH_CLIENT_SECRET': JSON.stringify(process.env.GRAPH_CLIENT_SECRET ?? ''),
+}
 
 export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     define: {
       __APP_VERSION__: appVersion,
+      ...oauthDefines,
     },
     resolve: {
       alias: {
