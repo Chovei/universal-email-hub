@@ -13,7 +13,7 @@ import { useAccountStore } from '../../stores/accountStore'
 import { useAccounts } from '../../hooks/useAccounts'
 
 export function AppShell() {
-  const { activePanel, composerOpen, closeComposer: closeUIComposer } = useUIStore()
+  const { activePanel, composerOpen, closeComposer: closeUIComposer, setActivePanel } = useUIStore()
   const { openComposer } = useComposeStore()
   const { accounts } = useAccountStore()
   const [showAddAccount, setShowAddAccount] = useState(false)
@@ -60,6 +60,10 @@ export function AppShell() {
           <AddAccountWizard
             onClose={() => setShowAddAccount(false)}
             onSuccess={() => setShowAddAccount(false)}
+            onGoToSettings={() => {
+              setShowAddAccount(false)
+              setActivePanel('settings')
+            }}
           />
         )}
       </AnimatePresence>

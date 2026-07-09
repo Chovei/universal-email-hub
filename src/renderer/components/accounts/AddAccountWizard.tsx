@@ -7,6 +7,7 @@ import type { ProviderKind } from '@shared/constants/providers'
 interface AddAccountWizardProps {
   onClose: () => void
   onSuccess?: () => void
+  onGoToSettings?: () => void
 }
 
 type Step = 'provider' | 'auth' | 'success'
@@ -29,7 +30,7 @@ const PROVIDERS: ProviderOption[] = [
   { id: 'imap', label: 'Custom IMAP', description: 'Any standard IMAP/SMTP server', authType: 'imap', color: '#71717A' },
 ]
 
-export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) {
+export function AddAccountWizard({ onClose, onSuccess, onGoToSettings }: AddAccountWizardProps) {
   const [step, setStep] = useState<Step>('provider')
   const [selectedProvider, setSelectedProvider] = useState<ProviderOption | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -58,7 +59,12 @@ export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) 
     setIsLoading(true)
     setError(null)
     try {
-      await window.emailAPI.accounts.oauthStart(selectedProvider.id as 'gmail' | 'graph')
+      const result = await window.emailAPI.accounts.oauthStart(selectedProvider.id as 'gmail' | 'graph')
+      const res = result as unknown as { data?: unknown; error?: { code: string; message: string } }
+      if (res?.error) {
+        setError(res.error.message.replace(/^Error:\s*/, '').split('\n')[0])
+        return
+      }
       setStep('success')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Authentication failed')
@@ -76,7 +82,7 @@ export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) 
     setIsLoading(true)
     setError(null)
     try {
-      await window.emailAPI.accounts.add({
+      const result = await window.emailAPI.accounts.add({
         provider: selectedProvider.id,
         credentials: {
           username: imapForm.username,
@@ -89,6 +95,11 @@ export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) 
           smtpSecurity: imapForm.smtpSecurity,
         },
       })
+      const res = result as unknown as { data?: unknown; error?: { code: string; message: string } }
+      if (res?.error) {
+        setError(res.error.message.replace(/^Error:\s*/, ''))
+        return
+      }
       setStep('success')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Connection failed. Check your credentials.')
@@ -200,7 +211,16 @@ export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) 
                       Waiting for you to complete sign-in in the browser…
                     </p>
                   )}
-                  {error && <ErrorMessage message={error} />}
+                  {error && (
+                    <ErrorMessage
+                      message={error}
+                      action={
+                        error.toLowerCase().includes('not configured') && onGoToSettings
+                          ? { label: 'Open Settings', onClick: onGoToSettings }
+                          : undefined
+                      }
+                    />
+                  )}
                   <button
                     onClick={() => void handleOAuthConnect()}
                     disabled={isLoading}
@@ -385,11 +405,27 @@ function FormField({
   )
 }
 
-function ErrorMessage({ message }: { message: string }) {
+function ErrorMessage({
+  message,
+  action,
+}: {
+  message: string
+  action?: { label: string; onClick: () => void }
+}) {
   return (
     <div className="flex items-start gap-2 px-3 py-2 mb-3 rounded-[var(--radius-md)] bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300">
       <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-      <p className="text-xs">{message}</p>
+      <div className="text-xs">
+        <p>{message}</p>
+        {action && (
+          <button
+            onClick={action.onClick}
+            className="mt-1.5 underline underline-offset-2 font-medium hover:no-underline"
+          >
+            {action.label} →
+          </button>
+        )}
+      </div>
     </div>
   )
 }
