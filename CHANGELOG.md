@@ -6,6 +6,21 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-07-10
+
+### Added
+
+- **Verification Center** — a dedicated panel that automatically detects login and 2FA codes from all connected inboxes and surfaces them with a one-click copy button
+- Auto-detection supports 40+ services including VRChat, Discord, Steam, Epic Games, Google, Microsoft, Apple, Roblox, Twitch, Reddit, GitHub, and more
+- Codes appear in real-time as emails arrive — no manual searching required
+- Per-service color-coded cards with large, easy-to-read code display and animated "Copied!" feedback
+- "Verification Codes" nav item in sidebar with live unread badge count
+- Codes persist locally and can be dismissed individually
+
+### Changed
+
+- Account database schema gains `notes` and `label` columns (groundwork for account metadata in a future release)
+
 ## [0.1.1] - 2026-07-10
 
 ### Changed
