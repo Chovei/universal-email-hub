@@ -45,9 +45,6 @@ export class BulkActionEngine {
   private abortControllers = new Map<string, AbortController>()
   private undoRecords = new Map<string, UndoRecord>()
 
-  // Accumulated during execute() across all batches, used to build undo record
-  private pendingUndo: Omit<UndoRecord, 'expiresAt'> | null = null
-
   private push(channel: string, payload: unknown): void {
     for (const w of BrowserWindow.getAllWindows()) {
       if (!w.isDestroyed()) w.webContents.send(channel, payload)
@@ -58,10 +55,10 @@ export class BulkActionEngine {
     const { operationId, action, threadIds } = req
     const ac = new AbortController()
     this.abortControllers.set(operationId, ac)
-    this.pendingUndo = null
+    let pendingUndo: Omit<UndoRecord, 'expiresAt'> | null = null
 
     if (REVERSIBLE.includes(action) && threadIds.length <= UNDO_LIMIT) {
-      this.pendingUndo = {
+      pendingUndo = {
         action, threadIds: [],
         previousFolderIds: {}, previousReadState: {}, previousStarState: {},
       }
@@ -80,13 +77,13 @@ export class BulkActionEngine {
       if (ac.signal.aborted) {
         this.push(IPC.BULK_CANCELLED, { operationId, completed, remaining: threadIds.length - completed })
         this.abortControllers.delete(operationId)
-        this.pendingUndo = null
+        pendingUndo = null
         return result
       }
 
       const batch = batches[batchIdx]!
       try {
-        this.executeBatch(action, batch, req.options ?? {})
+        this.executeBatch(action, batch, req.options ?? {}, pendingUndo)
         completed += batch.length
         result.succeeded += batch.length
       } catch (err) {
@@ -114,12 +111,12 @@ export class BulkActionEngine {
     }
 
     // Store undo record
-    if (this.pendingUndo) {
+    if (pendingUndo) {
       const token = randomUUID()
-      this.undoRecords.set(token, { ...this.pendingUndo, expiresAt: Date.now() + UNDO_TTL_MS })
+      this.undoRecords.set(token, { ...pendingUndo, expiresAt: Date.now() + UNDO_TTL_MS })
       setTimeout(() => this.undoRecords.delete(token), UNDO_TTL_MS)
       result.undoToken = token
-      this.pendingUndo = null
+      pendingUndo = null
     }
 
     this.push(IPC.BULK_DONE, result)
@@ -131,6 +128,7 @@ export class BulkActionEngine {
     action: BulkAction,
     threadIds: string[],
     options: NonNullable<BulkRequest['options']>,
+    pendingUndo: Omit<UndoRecord, 'expiresAt'> | null,
   ): void {
     const msgs = getMessagesByThreadIds(threadIds)
     const messageIds = msgs.map((m) => m.id)
@@ -139,9 +137,9 @@ export class BulkActionEngine {
       case 'markRead':
       case 'markUnread': {
         const read = action === 'markRead'
-        if (this.pendingUndo) {
-          for (const m of msgs) this.pendingUndo.previousReadState[m.id] = m.isRead
-          this.pendingUndo.threadIds.push(...threadIds)
+        if (pendingUndo) {
+          for (const m of msgs) pendingUndo.previousReadState[m.id] = m.isRead
+          pendingUndo.threadIds.push(...threadIds)
         }
         markMessagesRead(messageIds, read)
         break
@@ -150,9 +148,9 @@ export class BulkActionEngine {
       case 'star':
       case 'unstar': {
         const starred = action === 'star'
-        if (this.pendingUndo) {
-          for (const id of threadIds) this.pendingUndo.previousStarState[id] = !starred
-          this.pendingUndo.threadIds.push(...threadIds)
+        if (pendingUndo) {
+          for (const m of msgs) pendingUndo.previousStarState[m.threadId] = m.isStarred
+          pendingUndo.threadIds.push(...threadIds)
         }
         starMessages(messageIds, starred)
         for (const id of threadIds) updateThreadStar(id, starred)
@@ -161,11 +159,11 @@ export class BulkActionEngine {
 
       case 'archive': {
         const byAccount = this.groupByAccount(msgs)
-        if (this.pendingUndo) {
+        if (pendingUndo) {
           for (const m of msgs) {
-            if (m.folderId) this.pendingUndo.previousFolderIds[m.id] = m.folderId
+            if (m.folderId) pendingUndo.previousFolderIds[m.id] = m.folderId
           }
-          this.pendingUndo.threadIds.push(...threadIds)
+          pendingUndo.threadIds.push(...threadIds)
         }
         for (const [accountId, accountMsgs] of byAccount) {
           const archiveFolder = getFolderByType(accountId, 'archive')
@@ -193,11 +191,11 @@ export class BulkActionEngine {
 
       case 'move': {
         if (!options.targetFolderId) throw new Error('targetFolderId is required for move')
-        if (this.pendingUndo) {
+        if (pendingUndo) {
           for (const m of msgs) {
-            if (m.folderId) this.pendingUndo.previousFolderIds[m.id] = m.folderId
+            if (m.folderId) pendingUndo.previousFolderIds[m.id] = m.folderId
           }
-          this.pendingUndo.threadIds.push(...threadIds)
+          pendingUndo.threadIds.push(...threadIds)
         }
         moveMessages(messageIds, options.targetFolderId)
         break
@@ -247,7 +245,7 @@ export class BulkActionEngine {
     if (!record || Date.now() > record.expiresAt) return
     this.undoRecords.delete(undoToken)
 
-    const { action, previousFolderIds, previousReadState, previousStarState, threadIds } = record
+    const { action, previousFolderIds, previousReadState, previousStarState } = record
 
     if (action === 'markRead' || action === 'markUnread') {
       const byState = new Map<boolean, string[]>()
@@ -269,16 +267,23 @@ export class BulkActionEngine {
       for (const [folderId, ids] of byFolder) moveMessages(ids, folderId)
     }
 
-    if (action === 'star') {
-      const msgs = getMessagesByThreadIds(threadIds)
-      starMessages(msgs.map((m) => m.id), false)
-      for (const id of threadIds) updateThreadStar(id, false)
-    }
-
-    if (action === 'unstar') {
-      const msgs = getMessagesByThreadIds(threadIds)
-      starMessages(msgs.map((m) => m.id), true)
-      for (const id of threadIds) updateThreadStar(id, true)
+    if (action === 'star' || action === 'unstar') {
+      const toStar = Object.entries(previousStarState)
+        .filter(([, was]) => was === true)
+        .map(([id]) => id)
+      const toUnstar = Object.entries(previousStarState)
+        .filter(([, was]) => was === false)
+        .map(([id]) => id)
+      if (toStar.length) {
+        const m = getMessagesByThreadIds(toStar)
+        starMessages(m.map((x) => x.id), true)
+        for (const id of toStar) updateThreadStar(id, true)
+      }
+      if (toUnstar.length) {
+        const m = getMessagesByThreadIds(toUnstar)
+        starMessages(m.map((x) => x.id), false)
+        for (const id of toUnstar) updateThreadStar(id, false)
+      }
     }
   }
 
