@@ -24,6 +24,42 @@ export function getMessagesByThread(threadId: string): MessageSelect[] {
     .all()
 }
 
+export interface MessageSummary {
+  id: string
+  threadId: string
+  accountId: string
+  remoteId: string
+  folderId: string | null
+  isRead: boolean
+  isStarred: boolean
+}
+
+export function getMessagesByThreadIds(threadIds: string[]): MessageSummary[] {
+  if (threadIds.length === 0) return []
+  // SQLite limits inArray to ~32k params — chunk to be safe
+  const CHUNK = 500
+  if (threadIds.length > CHUNK) {
+    const results: MessageSummary[] = []
+    for (let i = 0; i < threadIds.length; i += CHUNK) {
+      results.push(...getMessagesByThreadIds(threadIds.slice(i, i + CHUNK)))
+    }
+    return results
+  }
+  return getDb()
+    .select({
+      id: messages.id,
+      threadId: messages.threadId,
+      accountId: messages.accountId,
+      remoteId: messages.remoteId,
+      folderId: messages.folderId,
+      isRead: messages.isRead,
+      isStarred: messages.isStarred,
+    })
+    .from(messages)
+    .where(inArray(messages.threadId, threadIds))
+    .all() as MessageSummary[]
+}
+
 export function upsertMessage(data: MessageInsert): MessageSelect {
   return getDb()
     .insert(messages)
