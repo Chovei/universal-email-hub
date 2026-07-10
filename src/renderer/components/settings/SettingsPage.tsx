@@ -1,10 +1,11 @@
-import { useState } from 'react'
-import { Sun, Moon, Monitor, Palette, Bell, User, Key, Info, Eye, EyeOff, Trash2 } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Sun, Moon, Monitor, Palette, Bell, User, Key, Info, Eye, EyeOff, Trash2, RefreshCw, Download, CheckCircle2, Loader2 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useUIStore } from '../../stores/uiStore'
 import { useAccounts } from '../../hooks/useAccounts'
 import { useSettings } from '../../hooks/useSettings'
 import { Avatar } from '../ui/Avatar'
+import type { UpdateStatus } from '@shared/types/ipc'
 
 export function SettingsPage() {
   const { theme, setTheme, density, setDensity } = useUIStore()
@@ -13,6 +14,16 @@ export function SettingsPage() {
   const [showClientSecret, setShowClientSecret] = useState(false)
   const [showGraphSecret, setShowGraphSecret] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
+  const [appVersion, setAppVersion] = useState<string>('…')
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
+
+  useEffect(() => {
+    type Env<T> = { data?: T }
+    void (window.emailAPI.updater.getAppInfo() as unknown as Promise<Env<{ version: string }>>)
+      .then((res) => { if (res.data?.version) setAppVersion(res.data.version) })
+
+    return window.emailAPI.updater.onStatus(setUpdateStatus)
+  }, [])
 
   const handleRemoveAccount = async (accountId: string) => {
     setRemovingId(accountId)
@@ -245,14 +256,14 @@ export function SettingsPage() {
 
           {/* About */}
           <Section title="About" icon={<Info className="w-4 h-4" />}>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <SettingRow label="Version">
-                <span className="text-sm text-[var(--color-muted-foreground)]">0.1.0</span>
-              </SettingRow>
-              <SettingRow label="Build">
                 <span className="text-sm text-[var(--color-muted-foreground)] font-mono">
-                  {new Date().toISOString().split('T')[0]}
+                  v{appVersion}
                 </span>
+              </SettingRow>
+              <SettingRow label="Updates">
+                <UpdateControl status={updateStatus} />
               </SettingRow>
             </div>
           </Section>
@@ -260,6 +271,86 @@ export function SettingsPage() {
       </div>
     </div>
   )
+}
+
+function UpdateControl({ status }: { status: UpdateStatus | null }) {
+  const check = () => { void window.emailAPI.updater.check() }
+  const install = () => { void window.emailAPI.updater.install() }
+
+  if (!status || status.type === 'not-available') {
+    return (
+      <div className="flex items-center gap-2">
+        {status?.type === 'not-available' && (
+          <span className="flex items-center gap-1 text-sm text-green-600 dark:text-green-400">
+            <CheckCircle2 className="w-4 h-4" />
+            Up to date
+          </span>
+        )}
+        <button
+          onClick={check}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm border border-[var(--color-border)] text-[var(--color-foreground)] hover:bg-[var(--color-muted)] transition-colors"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          {status ? 'Check again' : 'Check for Updates'}
+        </button>
+      </div>
+    )
+  }
+
+  if (status.type === 'checking') {
+    return (
+      <span className="flex items-center gap-1.5 text-sm text-[var(--color-muted-foreground)]">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Checking…
+      </span>
+    )
+  }
+
+  if (status.type === 'available') {
+    return (
+      <span className="flex items-center gap-2 text-sm text-[var(--color-muted-foreground)]">
+        v{status.version} available — downloading automatically…
+      </span>
+    )
+  }
+
+  if (status.type === 'downloading') {
+    return (
+      <span className="flex items-center gap-1.5 text-sm text-[var(--color-muted-foreground)]">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        Downloading… {Math.round(status.progress)}%
+      </span>
+    )
+  }
+
+  if (status.type === 'downloaded') {
+    return (
+      <button
+        onClick={install}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity"
+      >
+        <Download className="w-3.5 h-3.5" />
+        Restart to install v{status.version}
+      </button>
+    )
+  }
+
+  if (status.type === 'error') {
+    return (
+      <div className="flex items-center gap-2">
+        <span className="text-sm text-red-500">Check failed</span>
+        <button
+          onClick={check}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm border border-[var(--color-border)] text-[var(--color-foreground)] hover:bg-[var(--color-muted)] transition-colors"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Retry
+        </button>
+      </div>
+    )
+  }
+
+  return null
 }
 
 function Section({

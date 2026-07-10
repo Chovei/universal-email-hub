@@ -6,6 +6,17 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-07-10
+
+### Added
+
+- **Check for Updates button** in Settings → About — triggers an immediate update check and shows live status (checking, up to date, downloading with percentage, ready to install)
+- Version number in Settings is now pulled live from the app instead of being hardcoded
+
+### Fixed
+
+- **Restart to install** button appears automatically when an update finishes downloading
+
 ## [0.1.3] - 2026-07-10
 
 ### Added
@@ -80,7 +91,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.4...HEAD
+[0.1.4]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.0...v0.1.1
