@@ -21,9 +21,9 @@ interface WizardProvider {
   smtpHost: string
   smtpPort: string
   smtpSecurity: string
+  note?: string
   instructions: string[]
-  helpUrl?: string
-  helpText?: string
+  helpLinks?: Array<{ url: string; text: string }>
   isCustom?: boolean
 }
 
@@ -41,14 +41,16 @@ const WIZARD_PROVIDERS: WizardProvider[] = [
     smtpHost: 'smtp.gmail.com',
     smtpPort: '587',
     smtpSecurity: 'STARTTLS',
+    note: 'Sign into the Gmail you\'re adding in your browser first — Google opens these pages for whichever account is currently active.',
     instructions: [
-      'Enable 2-Step Verification on your Google Account (required)',
-      'Go to myaccount.google.com → Security → How you sign in → App passwords',
-      'Select Mail and name it "Email Hub" to get a 16-character code',
-      'Enter your Gmail address and that code below — not your regular password',
+      'Turn on 2-Step Verification (skip this if it\'s already on)',
+      'Create an App Password and name it "Email Hub"',
+      'Copy the 16-character code and paste it in the Password field below',
     ],
-    helpUrl: 'https://myaccount.google.com/apppasswords',
-    helpText: 'Open App Passwords ↗',
+    helpLinks: [
+      { url: 'https://myaccount.google.com/signinoptions/two-step-verification', text: 'Step 1: Enable 2-Step Verification ↗' },
+      { url: 'https://myaccount.google.com/apppasswords', text: 'Step 2: Create App Password ↗' },
+    ],
   },
   {
     id: 'outlook',
@@ -68,8 +70,7 @@ const WIZARD_PROVIDERS: WizardProvider[] = [
       'If you have 2-factor authentication: go to account.microsoft.com → Security → Advanced security options → App passwords',
       'Create one named "Email Hub" and use that password below',
     ],
-    helpUrl: 'https://account.microsoft.com/security',
-    helpText: 'Open Microsoft Account Security ↗',
+    helpLinks: [{ url: 'https://account.microsoft.com/security', text: 'Open Microsoft Account Security ↗' }],
   },
   {
     id: 'icloud',
@@ -89,8 +90,7 @@ const WIZARD_PROVIDERS: WizardProvider[] = [
       'Click Generate App-Specific Password and name it "Email Hub"',
       'Enter your full iCloud email address and the generated password below',
     ],
-    helpUrl: 'https://appleid.apple.com/account/manage',
-    helpText: 'Open Apple ID ↗',
+    helpLinks: [{ url: 'https://appleid.apple.com/account/manage', text: 'Open Apple ID ↗' }],
   },
   {
     id: 'yahoo',
@@ -110,8 +110,7 @@ const WIZARD_PROVIDERS: WizardProvider[] = [
       'Click "Generate app password", choose Other, name it "Email Hub"',
       'Use that password below — your regular Yahoo password will not work',
     ],
-    helpUrl: 'https://login.yahoo.com/account/security',
-    helpText: 'Open Yahoo Account Security ↗',
+    helpLinks: [{ url: 'https://login.yahoo.com/account/security', text: 'Open Yahoo Account Security ↗' }],
   },
   {
     id: 'fastmail',
@@ -674,6 +673,11 @@ export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) 
                       {provider.requiresAppPassword ? 'App Password Required' : 'How to connect'}
                     </span>
                   </div>
+                  {provider.note && (
+                    <p className="text-xs bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 rounded-lg px-2.5 py-2 leading-snug">
+                      {provider.note}
+                    </p>
+                  )}
                   <ol className="flex flex-col gap-1.5">
                     {provider.instructions.map((line, i) => (
                       <li key={i} className="flex gap-1.5 text-xs text-[var(--color-muted-foreground)] leading-snug">
@@ -682,15 +686,20 @@ export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) 
                       </li>
                     ))}
                   </ol>
-                  {provider.helpUrl && (
-                    <button
-                      type="button"
-                      onClick={() => openExternal(provider.helpUrl!)}
-                      className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline font-medium w-fit"
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                      {provider.helpText ?? 'Open setup page'}
-                    </button>
+                  {provider.helpLinks && provider.helpLinks.length > 0 && (
+                    <div className="flex flex-col gap-1 pt-0.5">
+                      {provider.helpLinks.map((link) => (
+                        <button
+                          key={link.url}
+                          type="button"
+                          onClick={() => openExternal(link.url)}
+                          className="flex items-center gap-1 text-xs text-[var(--color-primary)] hover:underline font-medium w-fit"
+                        >
+                          <ExternalLink className="w-3 h-3 shrink-0" />
+                          {link.text}
+                        </button>
+                      ))}
+                    </div>
                   )}
                 </div>
 
