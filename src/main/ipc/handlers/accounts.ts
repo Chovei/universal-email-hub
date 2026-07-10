@@ -142,8 +142,8 @@ export function registerAccountHandlers(): void {
         return { data: { success: true, email: parsed.credentials.username } }
       }
       let msg = result.error ?? 'Connection failed'
-      if (/AUTHENTICATIONFAILED|Invalid credentials|LOGIN failed/i.test(msg)) {
-        msg = 'Authentication failed — check your password or app password'
+      if (/AUTHENTICATIONFAILED|AUTHENTICATE failed|Invalid credentials|LOGIN failed|authentication failed|Command failed/i.test(msg)) {
+        msg = 'Authentication failed — check your email and app password (no spaces)'
       } else if (/ECONNREFUSED|ENOTFOUND|EHOSTUNREACH/i.test(msg)) {
         msg = 'Could not reach the mail server — check your internet connection'
       } else if (/ETIMEDOUT/i.test(msg)) {

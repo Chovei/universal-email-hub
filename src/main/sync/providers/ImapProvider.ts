@@ -102,12 +102,14 @@ export class ImapProvider extends BaseProvider {
 
   private makeClient(): ImapFlow {
     const creds = this._credentials
+    // App passwords (Gmail, Outlook) are displayed with spaces; strip them before auth
+    const password = creds.password.replace(/\s/g, '')
     return new ImapFlow({
       host: creds.host,
       port: creds.port,
       secure: creds.security === 'TLS',
       tls: { rejectUnauthorized: true },
-      auth: { user: creds.username, pass: creds.password },
+      auth: { user: creds.username, pass: password },
       logger: false,
     })
   }
@@ -142,12 +144,20 @@ export class ImapProvider extends BaseProvider {
 
   async testConnection(): Promise<{ success: boolean; error?: string }> {
     const client = this.makeClient()
+    let connected = false
     try {
       await client.connect()
+      connected = true
       await client.logout()
       return { success: true }
     } catch (err) {
-      return { success: false, error: String(err) }
+      // If connect() succeeded but logout() failed, the credentials are valid
+      if (connected) return { success: true }
+      // Extract the server's response text when available (richer than the generic message)
+      const detail =
+        (err as { responseText?: string }).responseText ??
+        (err instanceof Error ? err.message : String(err))
+      return { success: false, error: detail }
     }
   }
 

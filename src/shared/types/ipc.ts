@@ -39,6 +39,8 @@ export interface VerifyAccountResult {
   success: boolean
   email?: string
   error?: string
+  /** Raw error string from the server for diagnosis */
+  detail?: string
 }
 
 export interface UpdateAccountPayload {

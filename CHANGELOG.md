@@ -6,6 +6,14 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-07-10
+
+### Fixed
+
+- **Outlook "Command failed" error** — Microsoft's IMAP server returns a generic `NO` response on auth failure; the error is now correctly detected and shown as "Authentication failed" instead of the raw "Command failed" message
+- **App passwords with spaces fail silently** — Microsoft and Google display app passwords with spaces (e.g. `xxxx xxxx xxxx xxxx`); the app now strips all spaces before authenticating so copy-pasting works without manual editing
+- **Logout error masks successful connection** — if IMAP `connect()` succeeded but `LOGOUT` returned an error, the wizard incorrectly showed "Connection failed"; the connection result is now reported correctly in this case
+
 ## [0.1.4] - 2026-07-10
 
 ### Added
