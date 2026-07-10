@@ -113,6 +113,7 @@ export function registerMessageHandlers(): void {
       const rows = listThreads({
         accountId: parsed.accountId,
         folderId: parsed.folderId,
+        folderType: parsed.folderType,
         cursor,
         limit: parsed.limit,
         unreadOnly: parsed.unreadOnly,

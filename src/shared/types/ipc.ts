@@ -73,6 +73,7 @@ export interface UnreadChangedPayload {
 export interface ListMessagesPayload {
   accountId?: string
   folderId?: string
+  folderType?: string
   cursor?: string
   limit?: number
   unreadOnly?: boolean

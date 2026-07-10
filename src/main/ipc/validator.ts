@@ -47,6 +47,7 @@ export const UpdateAccountSchema = z.object({
 export const ListMessagesSchema = z.object({
   accountId: z.string().optional(),
   folderId: z.string().optional(),
+  folderType: z.string().optional(),
   cursor: z.string().max(512).optional(),
   limit: z.number().int().min(1).max(200).default(50),
   unreadOnly: z.boolean().optional(),

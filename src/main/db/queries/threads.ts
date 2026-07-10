@@ -1,6 +1,6 @@
 import { eq, desc, and, lt, gt, sql, inArray } from 'drizzle-orm'
 import { getDb } from '../client'
-import { threads, messages } from '../schema'
+import { threads, messages, folders } from '../schema'
 import type { ThreadInsert, ThreadSelect } from '../schema'
 
 export function getThreadById(id: string): ThreadSelect | undefined {
@@ -18,6 +18,7 @@ export function getThreadByRemoteId(accountId: string, remoteId: string): Thread
 export interface ListThreadsOptions {
   accountId?: string
   folderId?: string
+  folderType?: string
   cursor?: number
   limit?: number
   unreadOnly?: boolean
@@ -38,6 +39,13 @@ export function listThreads(opts: ListThreadsOptions): ThreadSelect[] {
       .select({ id: messages.threadId })
       .from(messages)
       .where(eq(messages.folderId, opts.folderId))
+    conditions.push(inArray(threads.id, sub))
+  } else if (opts.folderType) {
+    const sub = db
+      .select({ id: messages.threadId })
+      .from(messages)
+      .innerJoin(folders, eq(folders.id, messages.folderId))
+      .where(eq(folders.type, opts.folderType))
     conditions.push(inArray(threads.id, sub))
   }
   if (cursor) {

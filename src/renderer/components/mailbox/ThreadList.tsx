@@ -6,7 +6,6 @@ import { ThreadItem } from './ThreadItem'
 import { ThreadItemSkeleton } from '../ui/Skeleton'
 import { cn } from '../../lib/utils'
 import { useMessages } from '../../hooks/useMessages'
-import { useFolders } from '../../hooks/useFolders'
 import { useMailboxStore } from '../../stores/mailboxStore'
 import { useAccountStore } from '../../stores/accountStore'
 import { useUIStore } from '../../stores/uiStore'
@@ -25,12 +24,12 @@ export function ThreadList({ className }: ThreadListProps) {
   const parentRef = useRef<HTMLDivElement>(null)
 
   const singleAccountId = activeAccountId === 'unified' ? null : activeAccountId
-  const { folders } = useFolders(singleAccountId)
-  const selectedFolder = folders.find((f) => f.type === selectedFolderType)
 
+  const isStarred = selectedFolderType === 'starred'
   const { threads, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useMessages({
     accountId: singleAccountId ?? undefined,
-    folderId: selectedFolder?.id,
+    folderType: isStarred ? undefined : selectedFolderType,
+    starredOnly: isStarred ? true : undefined,
     limit: 50,
   })
 
