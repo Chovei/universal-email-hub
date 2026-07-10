@@ -6,6 +6,12 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-07-10
+
+### Fixed
+
+- **Outlook OAuth token exchange failed** — `TOKEN_URL` was still pointing at `/common` endpoint while the auth URL used `/consumers`; both now use `/consumers` so personal Microsoft accounts authenticate correctly
+
 ## [0.1.9] - 2026-07-10
 
 ### Added

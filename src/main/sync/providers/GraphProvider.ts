@@ -78,7 +78,7 @@ function waitForOAuthCode(port: number, timeoutMs = 300_000): Promise<string> {
 // ── Graph REST helpers ────────────────────────────────────────────────────
 
 const GRAPH_BASE = 'https://graph.microsoft.com/v1.0'
-const TOKEN_URL = 'https://login.microsoftonline.com/common/oauth2/v2.0/token'
+const TOKEN_URL = 'https://login.microsoftonline.com/consumers/oauth2/v2.0/token'
 
 async function graphGet(urlOrPath: string, accessToken: string): Promise<unknown> {
   const url = urlOrPath.startsWith('http') ? urlOrPath : `${GRAPH_BASE}${urlOrPath}`

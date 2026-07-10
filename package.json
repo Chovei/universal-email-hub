@@ -1,6 +1,6 @@
 {
   "name": "universal-email-hub",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Universal Email Hub — Premium Multi-Account Desktop Email Client",
   "main": "out/main/index.js",
   "private": true,
