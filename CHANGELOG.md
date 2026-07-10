@@ -6,6 +6,18 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-07-10
+
+### Changed
+
+- Gmail now uses App Password (IMAP) instead of OAuth — works instantly for any Gmail account with no Google verification or test-user approval required
+- Add Account wizard shows step-by-step App Password setup instructions inline
+
+### Fixed
+
+- Gmail and IMAP "Add Account" flows no longer show false success when the underlying connection fails — errors are now shown in the wizard
+- OAuth credential errors now include an "Open Settings →" link to jump directly to the credentials section
+
 ## [0.1.0] - 2026-07-09
 
 ### Added
@@ -31,5 +43,6 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Fatexxp/universal-email-hub/releases/tag/v0.1.0
