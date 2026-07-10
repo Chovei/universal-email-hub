@@ -16,6 +16,23 @@ export interface AccountRow {
   syncIntervalSeconds: number
   createdAt: number
   order: number
+  notes: string | null
+  label: string | null
+}
+
+// ── Verification code ──────────────────────────────────────────────────────
+
+export interface VerificationCodeRow {
+  id: string
+  accountId: string
+  messageId: string
+  serviceName: string
+  senderEmail: string
+  senderName: string | null
+  code: string
+  subject: string
+  receivedAt: number
+  isRead: boolean
 }
 
 // ── Folder ─────────────────────────────────────────────────────────────────

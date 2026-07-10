@@ -10,6 +10,7 @@ import type {
   SearchQuery,
   SearchResult,
   AppSettings,
+  VerificationCodeRow,
 } from './db'
 
 // ── Generic IPC envelope ───────────────────────────────────────────────────
@@ -309,5 +310,13 @@ export interface EmailAPI {
     skipVersion(version: string): Promise<void>
     getAppInfo(): Promise<AppInfo>
     onStatus(cb: (status: UpdateStatus) => void): () => void
+  }
+
+  // Verification codes
+  verificationCodes: {
+    list(limit?: number): Promise<VerificationCodeRow[]>
+    markRead(ids: string[]): Promise<void>
+    delete(ids: string[]): Promise<void>
+    onNew(cb: (code: VerificationCodeRow) => void): () => void
   }
 }

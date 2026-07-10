@@ -24,6 +24,8 @@ export const accounts = sqliteTable(
     syncIntervalSeconds: integer('sync_interval_seconds').notNull().default(60),
     order: integer('order').notNull().default(0),
     createdAt: integer('created_at').notNull(),
+    notes: text('notes'),
+    label: text('label'),
   },
   (t) => ({
     emailIdx: uniqueIndex('accounts_email_idx').on(t.email),
@@ -191,12 +193,37 @@ export const pluginStorage = sqliteTable(
   })
 )
 
+// ── verification_codes ─────────────────────────────────────────────────────
+
+export const verificationCodes = sqliteTable(
+  'verification_codes',
+  {
+    id: text('id').primaryKey(),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    messageId: text('message_id').notNull(),
+    serviceName: text('service_name').notNull(),
+    senderEmail: text('sender_email').notNull(),
+    senderName: text('sender_name'),
+    code: text('code').notNull(),
+    subject: text('subject').notNull().default(''),
+    receivedAt: integer('received_at').notNull(),
+    isRead: integer('is_read', { mode: 'boolean' }).notNull().default(false),
+  },
+  (t) => ({
+    accountReceivedIdx: index('verification_codes_account_received_idx').on(t.accountId, t.receivedAt),
+    receivedIdx: index('verification_codes_received_idx').on(t.receivedAt),
+  })
+)
+
 // ── Relations ──────────────────────────────────────────────────────────────
 
 export const accountsRelations = relations(accounts, ({ many }) => ({
   folders: many(folders),
   threads: many(threads),
   messages: many(messages),
+  verificationCodes: many(verificationCodes),
 }))
 
 export const foldersRelations = relations(folders, ({ one, many }) => ({
@@ -220,9 +247,15 @@ export const attachmentsRelations = relations(attachments, ({ one }) => ({
   message: one(messages, { fields: [attachments.messageId], references: [messages.id] }),
 }))
 
+export const verificationCodesRelations = relations(verificationCodes, ({ one }) => ({
+  account: one(accounts, { fields: [verificationCodes.accountId], references: [accounts.id] }),
+}))
+
 // ── Type exports from schema ───────────────────────────────────────────────
 
 export type AccountInsert = typeof accounts.$inferInsert
+export type VerificationCodeInsert = typeof verificationCodes.$inferInsert
+export type VerificationCodeSelect = typeof verificationCodes.$inferSelect
 export type AccountSelect = typeof accounts.$inferSelect
 export type FolderInsert = typeof folders.$inferInsert
 export type FolderSelect = typeof folders.$inferSelect

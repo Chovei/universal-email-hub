@@ -27,6 +27,8 @@ function toAccountRow(row: ReturnType<typeof getAllAccounts>[0]): AccountRow {
     syncIntervalSeconds: row.syncIntervalSeconds,
     createdAt: row.createdAt,
     order: row.order,
+    notes: row.notes ?? null,
+    label: row.label ?? null,
   }
 }
 

@@ -55,6 +55,7 @@ export function initDatabase(): void {
   }
 
   createFts5Table()
+  ensureSchemaExtensions()
 }
 
 function createTablesDirectly(): void {
@@ -65,7 +66,7 @@ function createTablesDirectly(): void {
       display_name TEXT NOT NULL, avatar_url TEXT, color TEXT DEFAULT '#6366F1' NOT NULL,
       is_active INTEGER DEFAULT 1 NOT NULL, sync_cursor TEXT, last_sync_at INTEGER,
       sync_interval_seconds INTEGER DEFAULT 60 NOT NULL, "order" INTEGER DEFAULT 0 NOT NULL,
-      created_at INTEGER NOT NULL
+      created_at INTEGER NOT NULL, notes TEXT, label TEXT
     );
     CREATE UNIQUE INDEX IF NOT EXISTS accounts_email_idx ON accounts (email);
     CREATE TABLE IF NOT EXISTS threads (
@@ -132,6 +133,39 @@ function createTablesDirectly(): void {
     );
     CREATE UNIQUE INDEX IF NOT EXISTS plugin_storage_pk ON plugin_storage (plugin_id, key);
     CREATE INDEX IF NOT EXISTS plugin_storage_plugin_idx ON plugin_storage (plugin_id);
+  `)
+}
+
+function ensureSchemaExtensions(): void {
+  if (!_sqlite) return
+
+  // Add new columns to accounts for existing databases (safe to run on fresh DBs too)
+  for (const sql of [
+    'ALTER TABLE accounts ADD COLUMN notes TEXT',
+    'ALTER TABLE accounts ADD COLUMN label TEXT',
+  ]) {
+    try { _sqlite.exec(sql) } catch { /* column already exists */ }
+  }
+
+  // verification_codes table — always safe with IF NOT EXISTS
+  _sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS verification_codes (
+      id TEXT PRIMARY KEY NOT NULL,
+      account_id TEXT NOT NULL,
+      message_id TEXT NOT NULL,
+      service_name TEXT NOT NULL,
+      sender_email TEXT NOT NULL,
+      sender_name TEXT,
+      code TEXT NOT NULL,
+      subject TEXT DEFAULT '' NOT NULL,
+      received_at INTEGER NOT NULL,
+      is_read INTEGER DEFAULT 0 NOT NULL,
+      FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS verification_codes_account_received_idx
+      ON verification_codes (account_id, received_at);
+    CREATE INDEX IF NOT EXISTS verification_codes_received_idx
+      ON verification_codes (received_at);
   `)
 }
 

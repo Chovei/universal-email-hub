@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 
 type Theme = 'light' | 'dark' | 'system'
 type Density = 'compact' | 'comfortable' | 'spacious'
-type ActivePanel = 'inbox' | 'search' | 'settings' | 'plugins'
+type ActivePanel = 'inbox' | 'search' | 'settings' | 'plugins' | 'verification'
 
 interface UIStore {
   theme: Theme

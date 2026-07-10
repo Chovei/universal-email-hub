@@ -28,6 +28,8 @@ import { getFolderByRemoteId, upsertFolder, updateFolderSyncCursor } from '../db
 import { getAccountById, updateAccount } from '../db/queries/accounts'
 import { IPC } from '@shared/constants/ipc-channels'
 import { monotonicFactory } from 'ulid'
+import { isVerificationEmail, extractCode, detectServiceName } from './VerificationExtractor'
+import { insertVerificationCode } from '../db/queries/verificationCodes'
 
 const ulid = monotonicFactory()
 
@@ -428,6 +430,30 @@ export class SyncEngine {
           fromName: raw.from.name ?? null,
           toAddresses: raw.to.map((a) => a.address).join(' '),
         })
+
+        // Extract verification / 2FA codes from incoming messages
+        if (!msgRow.isDraft) {
+          const subject = msgRow.subject ?? ''
+          const bodyText = msgRow.bodyText ?? ''
+          if (isVerificationEmail(subject, bodyText)) {
+            const code = extractCode(subject, bodyText)
+            if (code) {
+              try {
+                const vcRow = insertVerificationCode({
+                  accountId,
+                  messageId: msgRow.id,
+                  serviceName: detectServiceName(msgRow.fromAddress, msgRow.fromName),
+                  senderEmail: msgRow.fromAddress,
+                  senderName: msgRow.fromName,
+                  code,
+                  subject,
+                  receivedAt: msgRow.date,
+                })
+                this.win?.webContents.send(IPC.VERIFICATION_CODES_NEW, vcRow)
+              } catch { /* non-fatal — never break sync */ }
+            }
+          }
+        }
 
         if (!existingThread) newThreadRows.push(toThreadRow(threadRow))
       } else {

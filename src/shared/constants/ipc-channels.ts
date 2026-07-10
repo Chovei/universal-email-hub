@@ -83,6 +83,13 @@ export const IPC = {
   UPDATER_GET_APP_INFO: 'updater:getAppInfo',
   /** push: main → renderer */
   UPDATER_STATUS: 'updater:status',
+
+  // ── Verification codes ─────────────────────────────────────────────────────
+  VERIFICATION_CODES_LIST: 'verificationCodes:list',
+  VERIFICATION_CODES_MARK_READ: 'verificationCodes:markRead',
+  VERIFICATION_CODES_DELETE: 'verificationCodes:delete',
+  /** push: main → renderer — fired when a new code is detected during sync */
+  VERIFICATION_CODES_NEW: 'verificationCodes:new',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

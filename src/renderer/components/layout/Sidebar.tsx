@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import {
   Inbox, Send, FileText, Trash2, AlertTriangle, Archive,
   Star, Settings, Plus, RefreshCw, ChevronDown, ChevronRight,
-  Layers, Mail,
+  Layers, Mail, ShieldCheck,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { UnreadBadge } from '../ui/Badge'
@@ -11,6 +11,7 @@ import { useAccountStore } from '../../stores/accountStore'
 import { useMailboxStore } from '../../stores/mailboxStore'
 import { useUIStore } from '../../stores/uiStore'
 import { useSyncStore } from '../../stores/syncStore'
+import { useVerificationCodes } from '../../hooks/useVerificationCodes'
 import type { AccountRow } from '@shared/types/db'
 
 interface NavItemProps {
@@ -92,6 +93,7 @@ export function Sidebar({ onAddAccount }: SidebarProps) {
   const { selectedFolderType, setFolderType } = useMailboxStore()
   const { setActivePanel, activePanel, openComposer } = useUIStore()
   const { totalUnread } = useSyncStore()
+  const { unreadCount: verificationUnread } = useVerificationCodes()
 
   const isUnified = activeAccountId === 'unified'
 
@@ -145,6 +147,15 @@ export function Sidebar({ onAddAccount }: SidebarProps) {
             setActivePanel('inbox')
             setFolderType('inbox')
           }}
+        />
+
+        {/* Verification Center */}
+        <NavItem
+          icon={<ShieldCheck className="w-4 h-4" />}
+          label="Verification Codes"
+          isActive={activePanel === 'verification'}
+          unreadCount={verificationUnread}
+          onClick={() => setActivePanel('verification')}
         />
 
         <div className="h-px bg-[var(--color-sidebar-border)] my-2" />

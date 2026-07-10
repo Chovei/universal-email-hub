@@ -7,6 +7,7 @@ import { AddAccountWizard } from '../accounts/AddAccountWizard'
 import { InboxPage } from '../../pages/InboxPage'
 import { SearchPage } from '../../pages/SearchPage'
 import { SettingsPage } from '../settings/SettingsPage'
+import { VerificationCenter } from '../verification/VerificationCenter'
 import { useUIStore } from '../../stores/uiStore'
 import { useComposeStore } from '../../stores/composeStore'
 import { useAccountStore } from '../../stores/accountStore'
@@ -48,6 +49,7 @@ export function AppShell() {
         {activePanel === 'inbox' && <InboxPage />}
         {activePanel === 'search' && <SearchPage />}
         {activePanel === 'settings' && <SettingsPage />}
+        {activePanel === 'verification' && <VerificationCenter />}
       </main>
 
       {/* Global overlays */}

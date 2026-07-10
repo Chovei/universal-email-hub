@@ -101,6 +101,13 @@ const emailAPI: EmailAPI = {
     getAppInfo: () => invoke(IPC.UPDATER_GET_APP_INFO),
     onStatus: (cb) => on(IPC.UPDATER_STATUS, cb as (...args: unknown[]) => void),
   },
+
+  verificationCodes: {
+    list: (limit?: number) => invoke(IPC.VERIFICATION_CODES_LIST, limit),
+    markRead: (ids: string[]) => invoke(IPC.VERIFICATION_CODES_MARK_READ, ids),
+    delete: (ids: string[]) => invoke(IPC.VERIFICATION_CODES_DELETE, ids),
+    onNew: (cb) => on(IPC.VERIFICATION_CODES_NEW, cb as (...args: unknown[]) => void),
+  },
 }
 
 contextBridge.exposeInMainWorld('emailAPI', emailAPI)
