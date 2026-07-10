@@ -109,6 +109,16 @@ const emailAPI: EmailAPI = {
     delete: (ids: string[]) => invoke(IPC.VERIFICATION_CODES_DELETE, ids),
     onNew: (cb) => on(IPC.VERIFICATION_CODES_NEW, cb as (...args: unknown[]) => void),
   },
+
+  bulk: {
+    execute: (req) => invoke(IPC.BULK_EXECUTE, req),
+    cancel: (operationId) => invoke(IPC.BULK_CANCEL, { operationId }),
+    undo: (undoToken) => invoke(IPC.BULK_UNDO, { undoToken }),
+    queryIds: (criteria) => invoke(IPC.BULK_QUERY_IDS, criteria),
+    onProgress: (cb) => on(IPC.BULK_PROGRESS, cb as (...args: unknown[]) => void),
+    onDone: (cb) => on(IPC.BULK_DONE, cb as (...args: unknown[]) => void),
+    onCancelled: (cb) => on(IPC.BULK_CANCELLED, cb as (...args: unknown[]) => void),
+  },
 }
 
 contextBridge.exposeInMainWorld('emailAPI', emailAPI)

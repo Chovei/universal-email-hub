@@ -137,6 +137,67 @@ export interface MessagesUpdatedPayload {
   updates: Partial<ThreadRow>[]
 }
 
+// ── Bulk operations ────────────────────────────────────────────────────────
+
+export type BulkAction =
+  | 'delete' | 'archive' | 'move'
+  | 'markRead' | 'markUnread'
+  | 'star' | 'unstar'
+  | 'spam' | 'notSpam'
+  | 'export' | 'copy'
+
+export interface BulkRequest {
+  operationId: string
+  action: BulkAction
+  threadIds: string[]
+  options?: {
+    targetFolderId?: string
+    targetAccountId?: string
+    exportFormat?: 'eml' | 'csv'
+    exportPath?: string
+  }
+}
+
+export interface BulkProgress {
+  operationId: string
+  action: BulkAction
+  total: number
+  completed: number
+  failed: number
+  percentage: number
+  currentBatch: number
+  estimatedSecondsRemaining: number
+  errors: string[]
+}
+
+export interface BulkResult {
+  operationId: string
+  action: BulkAction
+  succeeded: number
+  failed: number
+  errors: string[]
+  undoToken?: string
+}
+
+export interface BulkCancelledPayload {
+  operationId: string
+  completed: number
+  remaining: number
+}
+
+export interface BulkQueryCriteria {
+  accountId?: string
+  folderId?: string
+  folderType?: string
+  unreadOnly?: boolean
+  readOnly?: boolean
+  starredOnly?: boolean
+  hasAttachment?: boolean
+  fromAddress?: string
+  olderThanDays?: number
+  newerThanDays?: number
+}
+
 // ── Compose ────────────────────────────────────────────────────────────────
 
 export interface SendPayload {
@@ -334,5 +395,16 @@ export interface EmailAPI {
     markRead(ids: string[]): Promise<void>
     delete(ids: string[]): Promise<void>
     onNew(cb: (code: VerificationCodeRow) => void): () => void
+  }
+
+  // Bulk operations
+  bulk: {
+    execute(req: BulkRequest): Promise<{ operationId: string }>
+    cancel(operationId: string): Promise<void>
+    undo(undoToken: string): Promise<void>
+    queryIds(criteria: BulkQueryCriteria): Promise<string[]>
+    onProgress(cb: (payload: BulkProgress) => void): () => void
+    onDone(cb: (payload: BulkResult) => void): () => void
+    onCancelled(cb: (payload: BulkCancelledPayload) => void): () => void
   }
 }

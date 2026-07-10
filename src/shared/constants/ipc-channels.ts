@@ -91,6 +91,18 @@ export const IPC = {
   VERIFICATION_CODES_DELETE: 'verificationCodes:delete',
   /** push: main → renderer — fired when a new code is detected during sync */
   VERIFICATION_CODES_NEW: 'verificationCodes:new',
+
+  // ── Bulk operations ────────────────────────────────────────────────────────
+  BULK_EXECUTE: 'bulk:execute',
+  BULK_CANCEL: 'bulk:cancel',
+  BULK_UNDO: 'bulk:undo',
+  BULK_QUERY_IDS: 'bulk:queryIds',
+  /** push: main → renderer */
+  BULK_PROGRESS: 'bulk:progress',
+  /** push: main → renderer */
+  BULK_DONE: 'bulk:done',
+  /** push: main → renderer */
+  BULK_CANCELLED: 'bulk:cancelled',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
