@@ -6,6 +6,28 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-07-10
+
+### Added
+
+- **Outlook / Hotmail support** — outlook.com, hotmail.com, and live.com accounts now connect via IMAP (`outlook.office365.com:993`) — no Azure app registration required
+- **Verify before save** — the wizard tests credentials against the live IMAP server before creating any database record; wrong passwords show a specific error message instead of false success
+- **Live sync progress in wizard** — after connecting, the wizard shows a real-time counter of messages being imported and transitions to "Done" automatically when the initial sync completes
+- **Per-provider setup instructions** — every provider card shows step-by-step guidance (with clickable links) for obtaining App Passwords or enabling IMAP
+
+### Fixed
+
+- **Gmail IMAP broken** — credentials were silently discarded due to a bug in the `isImapProvider` check; Gmail App Password accounts now sync correctly
+- **Zoho Mail not syncing** — `zoho` was missing from the IMAP switch case in SyncEngine and fell through to a no-op; it now routes to `ImapProvider`
+- **Wrong colors/display names for IMAP accounts** — Gmail and Outlook now show correct accent colors; email address and display name are derived correctly for all IMAP providers
+- **Outlook still routed through OAuth** — the wizard was sending `graph` OAuth for Outlook accounts; now uses IMAP directly
+
+### Changed
+
+- `ProviderKind` union extended with `'outlook'`
+- `AddAccountSchema` and new `VerifyAccountSchema` both accept `'outlook'`
+- Gmail's `authType` in `PROVIDER_META` corrected to `'apppassword'`; Zoho corrected to `'password'`
+
 ## [0.1.2] - 2026-07-10
 
 ### Added
@@ -58,6 +80,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Fatexxp/universal-email-hub/releases/tag/v0.1.0

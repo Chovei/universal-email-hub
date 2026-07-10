@@ -142,14 +142,26 @@ export class SyncEngine {
 
     switch (providerKind as ProviderKind) {
       case 'gmail':
-        provider = new GmailProvider(accountId)
+        // Use IMAP when credentials are provided (App Password flow).
+        // Fall back to OAuth GmailProvider for accounts created before v0.1.1.
+        if (_credentials) {
+          provider = new ImapProvider(accountId, 'gmail', _credentials)
+        } else {
+          try {
+            provider = ImapProvider.fromStore(accountId, 'gmail')
+          } catch {
+            provider = new GmailProvider(accountId)
+          }
+        }
         break
       case 'graph':
         provider = new GraphProvider(accountId)
         break
       case 'imap':
+      case 'outlook':
       case 'yahoo':
       case 'icloud':
+      case 'zoho':
       case 'fastmail':
       case 'aol':
       case 'gmx': {

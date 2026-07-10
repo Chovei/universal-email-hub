@@ -30,6 +30,17 @@ export interface AddAccountPayload {
   credentials?: BasicCredentials
 }
 
+export interface VerifyAccountPayload {
+  provider: ProviderKind
+  credentials: BasicCredentials
+}
+
+export interface VerifyAccountResult {
+  success: boolean
+  email?: string
+  error?: string
+}
+
 export interface UpdateAccountPayload {
   displayName?: string
   color?: string
@@ -221,6 +232,8 @@ export interface EmailAPI {
     reorder(accountIds: string[]): Promise<void>
     /** Start OAuth flow in system browser; resolves when auth completes */
     oauthStart(provider: 'gmail' | 'graph'): Promise<AccountRow>
+    /** Test IMAP connection without saving to DB */
+    verify(payload: VerifyAccountPayload): Promise<VerifyAccountResult>
     onSyncStatusChanged(cb: (payload: SyncStatusChangedPayload) => void): () => void
   }
 

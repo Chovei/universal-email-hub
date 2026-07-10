@@ -1,12 +1,13 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import { ipcMain } from 'electron'
+import type { BrowserWindow } from 'electron'
 import { IPC } from '@shared/constants/ipc-channels'
-import { AddAccountSchema, UpdateAccountSchema } from '../validator'
+import { AddAccountSchema, UpdateAccountSchema, VerifyAccountSchema } from '../validator'
 import { getAllAccounts, insertAccount, updateAccount, deleteAccount, getAccountByEmail } from '../../db/queries/accounts'
 import { SyncEngine } from '../../sync/SyncEngine'
 import { credentialStore } from '../../security/keychain'
 import { GmailProvider } from '../../sync/providers/GmailProvider'
 import { GraphProvider } from '../../sync/providers/GraphProvider'
-import { storeImapCredentials } from '../../sync/providers/ImapProvider'
+import { ImapProvider, storeImapCredentials } from '../../sync/providers/ImapProvider'
 import type { AccountRow } from '@shared/types/db'
 import type { ProviderKind } from '@shared/constants/providers'
 import { monotonicFactory } from 'ulid'
@@ -48,23 +49,24 @@ export function registerAccountHandlers(): void {
       const id = ulid()
       const now = Date.now()
 
-      const isImapProvider = parsed.provider !== 'gmail' && parsed.provider !== 'graph'
       const creds = parsed.credentials
 
-      // For IMAP providers, store credentials before inserting the account row
-      if (isImapProvider && creds) {
+      // Store credentials for every IMAP-based provider (anything with credentials)
+      if (creds) {
         storeImapCredentials(id, creds)
       }
 
-      // Derive display identity from credentials when available
-      const email = isImapProvider && creds ? creds.username : ''
-      const displayName = isImapProvider && creds ? creds.username.split('@')[0] : 'New Account'
+      const email = creds?.username ?? ''
+      const displayName = creds ? (creds.username.split('@')[0] ?? 'Account') : 'New Account'
 
       const providerColors: Record<string, string> = {
+        gmail: '#EA4335',
+        outlook: '#0078D4',
+        graph: '#0078D4',
         icloud: '#1D7AE0',
         yahoo: '#720E9E',
         fastmail: '#3256CB',
-        zoho: '#E61E25',
+        zoho: '#E42527',
         aol: '#FF0000',
         gmx: '#1C449B',
       }
@@ -127,6 +129,31 @@ export function registerAccountHandlers(): void {
       return { data: null }
     } catch (err) {
       return { error: { code: 'REORDER_ERROR', message: String(err) } }
+    }
+  })
+
+  ipcMain.handle(IPC.ACCOUNTS_VERIFY, async (_event, payload: unknown) => {
+    try {
+      const parsed = VerifyAccountSchema.parse(payload)
+      const tempId = `verify_${Date.now()}`
+      const provider = new ImapProvider(tempId, parsed.provider, parsed.credentials)
+      const result = await provider.testConnection()
+      if (result.success) {
+        return { data: { success: true, email: parsed.credentials.username } }
+      }
+      let msg = result.error ?? 'Connection failed'
+      if (/AUTHENTICATIONFAILED|Invalid credentials|LOGIN failed/i.test(msg)) {
+        msg = 'Authentication failed — check your password or app password'
+      } else if (/ECONNREFUSED|ENOTFOUND|EHOSTUNREACH/i.test(msg)) {
+        msg = 'Could not reach the mail server — check your internet connection'
+      } else if (/ETIMEDOUT/i.test(msg)) {
+        msg = 'Connection timed out — IMAP may be blocked or the server address is wrong'
+      } else if (/certificate|SSL|TLS/i.test(msg)) {
+        msg = 'SSL/TLS error — try changing the security setting'
+      }
+      return { data: { success: false, error: msg } }
+    } catch (err) {
+      return { error: { code: 'VERIFY_ERROR', message: String(err) } }
     }
   })
 

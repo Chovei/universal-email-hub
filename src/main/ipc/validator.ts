@@ -9,22 +9,29 @@ export const AddressSchema = z.object({
 
 // ── Accounts ───────────────────────────────────────────────────────────────
 
+const PROVIDER_ENUM = z.enum([
+  'gmail', 'graph', 'outlook', 'imap', 'yahoo', 'icloud', 'exchange', 'zoho', 'fastmail', 'aol', 'gmx',
+])
+
+const CREDENTIALS_SCHEMA = z.object({
+  username: z.string(),
+  password: z.string(),
+  host: z.string(),
+  port: z.number().int().min(1).max(65535),
+  security: z.enum(['TLS', 'STARTTLS', 'NONE']),
+  smtpHost: z.string(),
+  smtpPort: z.number().int().min(1).max(65535),
+  smtpSecurity: z.enum(['TLS', 'STARTTLS', 'NONE']),
+})
+
+export const VerifyAccountSchema = z.object({
+  provider: PROVIDER_ENUM,
+  credentials: CREDENTIALS_SCHEMA,
+})
+
 export const AddAccountSchema = z.object({
-  provider: z.enum([
-    'gmail', 'graph', 'imap', 'yahoo', 'icloud', 'exchange', 'zoho', 'fastmail', 'aol', 'gmx',
-  ]),
-  credentials: z
-    .object({
-      username: z.string(),
-      password: z.string(),
-      host: z.string(),
-      port: z.number().int().min(1).max(65535),
-      security: z.enum(['TLS', 'STARTTLS', 'NONE']),
-      smtpHost: z.string(),
-      smtpPort: z.number().int().min(1).max(65535),
-      smtpSecurity: z.enum(['TLS', 'STARTTLS', 'NONE']),
-    })
-    .optional(),
+  provider: PROVIDER_ENUM,
+  credentials: CREDENTIALS_SCHEMA.optional(),
 })
 
 export const UpdateAccountSchema = z.object({

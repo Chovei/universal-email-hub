@@ -1,6 +1,7 @@
 export type ProviderKind =
   | 'gmail'
   | 'graph'
+  | 'outlook'
   | 'imap'
   | 'yahoo'
   | 'icloud'
@@ -29,9 +30,13 @@ export const PROVIDER_META: Record<ProviderKind, ProviderMeta> = {
     kind: 'gmail',
     label: 'Gmail',
     color: '#EA4335',
-    authType: 'oauth',
-    supportsIdle: false,
-    supportsPush: true,
+    authType: 'apppassword',
+    defaultHost: 'imap.gmail.com',
+    defaultPort: 993,
+    defaultSmtpHost: 'smtp.gmail.com',
+    defaultSmtpPort: 587,
+    supportsIdle: true,
+    supportsPush: false,
     iconId: 'gmail',
   },
   graph: {
@@ -41,6 +46,19 @@ export const PROVIDER_META: Record<ProviderKind, ProviderMeta> = {
     authType: 'oauth',
     supportsIdle: false,
     supportsPush: true,
+    iconId: 'microsoft',
+  },
+  outlook: {
+    kind: 'outlook',
+    label: 'Outlook / Hotmail',
+    color: '#0078D4',
+    authType: 'password',
+    defaultHost: 'outlook.office365.com',
+    defaultPort: 993,
+    defaultSmtpHost: 'smtp.office365.com',
+    defaultSmtpPort: 587,
+    supportsIdle: true,
+    supportsPush: false,
     iconId: 'microsoft',
   },
   imap: {
@@ -91,7 +109,11 @@ export const PROVIDER_META: Record<ProviderKind, ProviderMeta> = {
     kind: 'zoho',
     label: 'Zoho Mail',
     color: '#E42527',
-    authType: 'oauth',
+    authType: 'password',
+    defaultHost: 'imappro.zoho.com',
+    defaultPort: 993,
+    defaultSmtpHost: 'smtppro.zoho.com',
+    defaultSmtpPort: 465,
     supportsIdle: true,
     supportsPush: false,
     iconId: 'zoho',
