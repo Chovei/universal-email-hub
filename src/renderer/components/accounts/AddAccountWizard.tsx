@@ -25,6 +25,7 @@ interface WizardProvider {
   instructions: string[]
   helpLinks?: Array<{ url: string; text: string }>
   isCustom?: boolean
+  isOAuth?: boolean
 }
 
 const WIZARD_PROVIDERS: WizardProvider[] = [
@@ -59,21 +60,20 @@ const WIZARD_PROVIDERS: WizardProvider[] = [
     color: '#0078D4',
     passwordLabel: 'Password',
     requiresAppPassword: false,
+    isOAuth: true,
     imapHost: 'outlook.office365.com',
     imapPort: '993',
     imapSecurity: 'TLS',
     smtpHost: 'smtp.office365.com',
     smtpPort: '587',
     smtpSecurity: 'STARTTLS',
-    note: 'Sign into the Outlook account you\'re adding in your browser first before clicking the links below.',
     instructions: [
-      'Enable IMAP — Outlook has it off by default (Step 1 link below)',
-      'Enter your Outlook email and regular password below',
-      'If you have 2-factor authentication, create an App Password instead of using your regular password',
+      'Click "Sign in with Microsoft" below — a browser window will open',
+      'Log in with your Outlook, Hotmail, or Live account as normal',
+      'Grant the requested permissions and the account will be added automatically',
     ],
     helpLinks: [
-      { url: 'https://outlook.live.com/mail/0/options/mail/accounts/popImap', text: 'Step 1: Enable IMAP in Outlook Settings ↗' },
-      { url: 'https://account.microsoft.com/security', text: 'Step 2: App Password (only needed if you have 2FA) ↗' },
+      { url: 'https://portal.azure.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade', text: 'Azure App Registrations (first-time setup only) ↗' },
     ],
   },
   {
@@ -249,6 +249,144 @@ function StepRow({
         {label}
         {extra && <span className="font-normal text-[var(--color-muted-foreground)] ml-1.5">{extra}</span>}
       </span>
+    </div>
+  )
+}
+
+// ── Microsoft OAuth connecting step ───────────────────────────────────────────
+
+function OAuthConnectingStep({
+  provider,
+  onRetry,
+  onDone,
+}: {
+  provider: WizardProvider
+  onRetry: () => void
+  onDone: () => void
+}) {
+  const [phase, setPhase] = useState<'waiting' | 'syncing' | 'done' | 'error'>('waiting')
+  const [errorMsg, setErrorMsg] = useState('')
+  const [syncedCount, setSyncedCount] = useState(0)
+
+  useEffect(() => {
+    let cancelled = false
+    const cleanups: Array<() => void> = []
+
+    async function run(): Promise<void> {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      type Env<T> = { data?: T; error?: { code: string; message: string } }
+
+      const oRes = await (
+        window.emailAPI.accounts.oauthStart('graph') as unknown as Promise<Env<AccountRow>>
+      )
+      if (cancelled) return
+
+      if (oRes.error) {
+        setErrorMsg(oRes.error.message)
+        setPhase('error')
+        return
+      }
+
+      const accountId = oRes.data!.id
+      setPhase('syncing')
+      let count = 0
+
+      cleanups.push(
+        window.emailAPI.accounts.onSyncStatusChanged(({ accountId: aid, status }) => {
+          if (aid !== accountId) return
+          if ((status.state === 'idle' || status.state === 'error') && !cancelled) {
+            setPhase('done')
+          }
+        })
+      )
+
+      cleanups.push(
+        window.emailAPI.messages.onNew(({ threads, accountId: aid }) => {
+          if (aid !== accountId) return
+          count += threads.length
+          if (!cancelled) setSyncedCount(count)
+        })
+      )
+
+      const sRes = await (
+        window.emailAPI.sync.getStatus() as unknown as Promise<Env<Record<string, { state: string }>>>
+      )
+      if (!cancelled) {
+        const s = sRes.data?.[accountId]?.state
+        if (s === 'idle' || s === 'error') setPhase('done')
+      }
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+      cleanups.forEach((fn) => fn())
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const isDone = phase === 'done'
+  const isError = phase === 'error'
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-base font-semibold text-[var(--color-foreground)] mb-0.5">
+          {isError ? 'Sign-in failed' : isDone ? 'Account added!' : phase === 'syncing' ? 'Syncing your inbox…' : 'Waiting for Microsoft sign-in…'}
+        </h2>
+        <p className="text-sm text-[var(--color-muted-foreground)]">
+          {isError
+            ? 'Check the error below and try again.'
+            : isDone
+            ? `${provider.label} is syncing in the background.`
+            : phase === 'syncing'
+            ? 'This usually takes under 30 seconds.'
+            : 'A browser window opened — sign in to complete setup.'}
+        </p>
+      </div>
+
+      {(phase === 'waiting' || phase === 'syncing') && (
+        <div className="flex flex-col items-center gap-3 py-4">
+          <Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary)]" />
+          {phase === 'syncing' && syncedCount > 0 && (
+            <p className="text-sm text-[var(--color-muted-foreground)]">
+              {syncedCount.toLocaleString()} messages imported…
+            </p>
+          )}
+        </div>
+      )}
+
+      {isDone && (
+        <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+          <CheckCircle2 className="w-5 h-5" />
+          <span className="text-sm font-medium">Connected successfully</span>
+        </div>
+      )}
+
+      {isError && (
+        <div className="bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-600 dark:text-red-400">
+          {errorMsg}
+        </div>
+      )}
+
+      <div className="flex flex-col gap-2 pt-1">
+        {isDone && (
+          <button
+            onClick={onDone}
+            className="w-full py-2.5 px-4 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:opacity-90 transition-opacity"
+          >
+            Done
+          </button>
+        )}
+        {isError && (
+          <button
+            onClick={onRetry}
+            className="w-full py-2.5 px-4 rounded-lg border border-[var(--color-border)] text-[var(--color-foreground)] text-sm font-medium hover:bg-[var(--color-accent)] transition-colors"
+          >
+            Try again
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -520,7 +658,7 @@ interface AddAccountWizardProps {
   onGoToSettings?: () => void
 }
 
-type Step = 'provider' | 'auth' | 'connecting'
+type Step = 'provider' | 'auth' | 'connecting' | 'oauth-connecting'
 
 export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) {
   const [step, setStep] = useState<Step>('provider')
@@ -576,7 +714,7 @@ export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) 
     void window.emailAPI.shell.openExternal(url)
   }, [])
 
-  const isConnecting = step === 'connecting'
+  const isConnecting = step === 'connecting' || step === 'oauth-connecting'
 
   return (
     <div
@@ -712,72 +850,82 @@ export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) 
                   )}
                 </div>
 
-                {/* Fields */}
-                <div className="flex flex-col gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-[var(--color-foreground)]">
-                      Email address
-                    </label>
-                    <input
-                      type="email"
-                      autoComplete="email"
-                      placeholder="you@example.com"
-                      value={form.username}
-                      onChange={(e) => updateForm('username', e.target.value)}
-                      className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] text-sm text-[var(--color-foreground)] placeholder:text-[var(--color-muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)] transition-shadow"
-                    />
-                  </div>
-
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-xs font-medium text-[var(--color-foreground)]">
-                      {provider.passwordLabel}
-                    </label>
-                    <input
-                      type="password"
-                      autoComplete="current-password"
-                      placeholder={provider.requiresAppPassword ? '16-character app password' : 'Password'}
-                      value={form.password}
-                      onChange={(e) => updateForm('password', e.target.value)}
-                      onKeyDown={(e) => { if (e.key === 'Enter') handleConnect() }}
-                      className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] text-sm text-[var(--color-foreground)] placeholder:text-[var(--color-muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)] transition-shadow"
-                    />
-                  </div>
-
-                  {/* Server settings */}
-                  {provider.isCustom ? (
-                    <ServerSettingsFields form={form} updateForm={updateForm} />
-                  ) : (
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => setShowAdvanced((v) => !v)}
-                        className="text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
-                      >
-                        {showAdvanced ? '▾' : '▸'} Advanced server settings
-                      </button>
-                      {showAdvanced && (
-                        <div className="mt-3">
-                          <ServerSettingsFields form={form} updateForm={updateForm} />
-                        </div>
-                      )}
+                {/* Fields — OAuth providers show a sign-in button, IMAP providers show a form */}
+                {provider.isOAuth ? (
+                  <button
+                    onClick={() => setStep('oauth-connecting')}
+                    className="w-full py-3 px-4 rounded-lg text-white text-sm font-semibold hover:opacity-90 active:opacity-80 transition-opacity flex items-center justify-center gap-2"
+                    style={{ backgroundColor: provider.color }}
+                  >
+                    Sign in with Microsoft
+                  </button>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-[var(--color-foreground)]">
+                        Email address
+                      </label>
+                      <input
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@example.com"
+                        value={form.username}
+                        onChange={(e) => updateForm('username', e.target.value)}
+                        className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] text-sm text-[var(--color-foreground)] placeholder:text-[var(--color-muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)] transition-shadow"
+                      />
                     </div>
-                  )}
-                </div>
 
-                {formError && (
-                  <p className="text-xs text-red-500 font-medium">{formError}</p>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-[var(--color-foreground)]">
+                        {provider.passwordLabel}
+                      </label>
+                      <input
+                        type="password"
+                        autoComplete="current-password"
+                        placeholder={provider.requiresAppPassword ? '16-character app password' : 'Password'}
+                        value={form.password}
+                        onChange={(e) => updateForm('password', e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleConnect() }}
+                        className="w-full px-3 py-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] text-sm text-[var(--color-foreground)] placeholder:text-[var(--color-muted-foreground)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/30 focus:border-[var(--color-primary)] transition-shadow"
+                      />
+                    </div>
+
+                    {/* Server settings */}
+                    {provider.isCustom ? (
+                      <ServerSettingsFields form={form} updateForm={updateForm} />
+                    ) : (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={() => setShowAdvanced((v) => !v)}
+                          className="text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] transition-colors"
+                        >
+                          {showAdvanced ? '▾' : '▸'} Advanced server settings
+                        </button>
+                        {showAdvanced && (
+                          <div className="mt-3">
+                            <ServerSettingsFields form={form} updateForm={updateForm} />
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {formError && (
+                      <p className="text-xs text-red-500 font-medium">{formError}</p>
+                    )}
+
+                    <button
+                      onClick={handleConnect}
+                      className="w-full py-2.5 px-4 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:opacity-90 active:opacity-80 transition-opacity"
+                    >
+                      Connect Account
+                    </button>
+                  </div>
                 )}
-
-                <button
-                  onClick={handleConnect}
-                  className="w-full py-2.5 px-4 rounded-lg bg-[var(--color-primary)] text-white text-sm font-medium hover:opacity-90 active:opacity-80 transition-opacity"
-                >
-                  Connect Account
-                </button>
               </motion.div>
             )}
 
-            {/* ── Connecting / progress ──────────────────────────────────── */}
+            {/* ── IMAP connecting / progress ─────────────────────────────── */}
             {step === 'connecting' && provider && (
               <motion.div
                 key="connecting"
@@ -789,6 +937,23 @@ export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) 
                 <ConnectingStep
                   provider={provider}
                   form={form}
+                  onRetry={handleRetry}
+                  onDone={handleDone}
+                />
+              </motion.div>
+            )}
+
+            {/* ── OAuth connecting / progress ────────────────────────────── */}
+            {step === 'oauth-connecting' && provider && (
+              <motion.div
+                key="oauth-connecting"
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -10 }}
+                transition={{ duration: 0.12 }}
+              >
+                <OAuthConnectingStep
+                  provider={provider}
                   onRetry={handleRetry}
                   onDone={handleDone}
                 />

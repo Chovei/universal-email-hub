@@ -6,6 +6,20 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-07-10
+
+### Added
+
+- **"Sign in with Microsoft" for Outlook accounts** — clicking the button opens a browser popup for normal Microsoft login; no app password or IMAP config needed
+- `OAuthConnectingStep` component shows a live spinner while the browser auth completes, then transitions to sync progress automatically
+
+### Changed
+
+- Outlook wizard no longer shows email/password fields — uses OAuth browser flow instead
+- Microsoft OAuth no longer requires a Client Secret — only the Azure app's Client ID is needed (public client / desktop app flow)
+- Authority changed from `/common/` to `/consumers/` to target personal Microsoft accounts specifically
+- Settings → OAuth Credentials → Microsoft section updated to show only Client ID field with clearer setup instructions
+
 ## [0.1.8] - 2026-07-10
 
 ### Fixed

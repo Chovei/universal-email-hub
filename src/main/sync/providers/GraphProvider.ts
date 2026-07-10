@@ -24,19 +24,16 @@ function tokenKey(accountId: string) {
   return `account:${accountId}:tokens`
 }
 
-function getGraphCredentials(): { clientId: string; clientSecret: string } {
+function getGraphCredentials(): { clientId: string } {
   const clientId =
     (getSetting('graphClientId') as string) || process.env['GRAPH_CLIENT_ID'] || ''
-  const clientSecret =
-    (getSetting('graphClientSecret') as string) || process.env['GRAPH_CLIENT_SECRET'] || ''
-  if (!clientId || !clientSecret) {
+  if (!clientId) {
     throw new Error(
-      'Microsoft Graph credentials not configured. ' +
-        'Go to Settings → OAuth Credentials and add your Azure app Client ID and Secret, ' +
-        'or set GRAPH_CLIENT_ID and GRAPH_CLIENT_SECRET environment variables.'
+      'Microsoft Client ID not configured. ' +
+        'Go to Settings → OAuth Credentials, paste your Azure app Client ID, and save.'
     )
   }
-  return { clientId, clientSecret }
+  return { clientId }
 }
 
 // ── OAuth loopback helpers ────────────────────────────────────────────────
@@ -282,7 +279,7 @@ export class GraphProvider extends BaseProvider {
   // ── Auth ──────────────────────────────────────────────────────────────
 
   async authenticate(): Promise<OAuthTokens> {
-    const { clientId, clientSecret } = getGraphCredentials()
+    const { clientId } = getGraphCredentials()
     const port = await findFreePort()
     const redirectUri = `http://localhost:${port}`
     const scopes = [
@@ -292,7 +289,8 @@ export class GraphProvider extends BaseProvider {
       'offline_access',
     ].join(' ')
 
-    const authUrl = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?` +
+    // /consumers endpoint targets personal Microsoft accounts only
+    const authUrl = `https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize?` +
       new URLSearchParams({ client_id: clientId, response_type: 'code',
         redirect_uri: redirectUri, scope: scopes, prompt: 'select_account' }).toString()
 
@@ -302,7 +300,8 @@ export class GraphProvider extends BaseProvider {
     const res = await fetch(TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret,
+      // Public client — no client_secret needed, PKCE-style exchange
+      body: new URLSearchParams({ client_id: clientId,
         code, redirect_uri: redirectUri, grant_type: 'authorization_code' }).toString(),
     })
     if (!res.ok) throw new Error(`Token exchange failed: ${await res.text()}`)
@@ -321,11 +320,11 @@ export class GraphProvider extends BaseProvider {
   }
 
   async refreshTokens(current: OAuthTokens): Promise<OAuthTokens> {
-    const { clientId, clientSecret } = getGraphCredentials()
+    const { clientId } = getGraphCredentials()
     const res = await fetch(TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({ client_id: clientId, client_secret: clientSecret,
+      body: new URLSearchParams({ client_id: clientId,
         refresh_token: current.refreshToken, grant_type: 'refresh_token' }).toString(),
     })
     if (!res.ok) throw new Error(`Token refresh failed: ${await res.text()}`)

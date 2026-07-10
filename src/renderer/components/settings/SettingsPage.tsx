@@ -12,7 +12,7 @@ export function SettingsPage() {
   const { accounts, removeAccount } = useAccounts()
   const { settings, setSetting } = useSettings()
   const [showClientSecret, setShowClientSecret] = useState(false)
-  const [showGraphSecret, setShowGraphSecret] = useState(false)
+
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [appVersion, setAppVersion] = useState<string>('…')
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null)
@@ -218,11 +218,10 @@ export function SettingsPage() {
           <Section title="Microsoft 365 OAuth Credentials" icon={<Key className="w-4 h-4" />}>
             <div className="space-y-4">
               <p className="text-xs text-[var(--color-muted-foreground)] -mt-1">
-                Required to sign in with Microsoft 365 / Outlook. Register an app at{' '}
-                <span className="font-mono">portal.azure.com</span>, add{' '}
-                <span className="font-mono">http://localhost</span> as a redirect URI, enable{' '}
-                <span className="font-mono">Mail.ReadWrite</span> and{' '}
-                <span className="font-mono">Mail.Send</span> delegated permissions.
+                Required for "Sign in with Microsoft" on Outlook accounts. Register a free app at{' '}
+                <span className="font-mono">portal.azure.com</span> → App registrations → New registration.
+                Set redirect URI to <span className="font-mono">http://localhost</span> (public client),
+                enable "Allow public client flows", then paste the Application (client) ID below.
               </p>
               <SettingRow label="Client ID">
                 <input
@@ -232,24 +231,6 @@ export function SettingsPage() {
                   placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
                   className="w-64 px-3 py-1.5 text-sm bg-[var(--color-background)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-foreground)] placeholder:text-[var(--color-muted-foreground)] outline-none focus:border-[var(--color-primary)] font-mono"
                 />
-              </SettingRow>
-              <SettingRow label="Client Secret">
-                <div className="relative flex items-center">
-                  <input
-                    type={showGraphSecret ? 'text' : 'password'}
-                    value={settings?.graphClientSecret ?? ''}
-                    onChange={(e) => setSetting('graphClientSecret', e.target.value.trim())}
-                    placeholder="••••••••••••••••"
-                    className="w-64 px-3 py-1.5 pr-9 text-sm bg-[var(--color-background)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-[var(--color-foreground)] placeholder:text-[var(--color-muted-foreground)] outline-none focus:border-[var(--color-primary)] font-mono"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowGraphSecret((v) => !v)}
-                    className="absolute right-2 text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
-                  >
-                    {showGraphSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
               </SettingRow>
             </div>
           </Section>
