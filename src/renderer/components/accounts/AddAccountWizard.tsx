@@ -259,10 +259,12 @@ function OAuthConnectingStep({
   provider,
   onRetry,
   onDone,
+  onCancel,
 }: {
   provider: WizardProvider
   onRetry: () => void
   onDone: () => void
+  onCancel: () => void
 }) {
   const [phase, setPhase] = useState<'waiting' | 'syncing' | 'done' | 'error'>('waiting')
   const [errorMsg, setErrorMsg] = useState('')
@@ -384,6 +386,14 @@ function OAuthConnectingStep({
             className="w-full py-2.5 px-4 rounded-lg border border-[var(--color-border)] text-[var(--color-foreground)] text-sm font-medium hover:bg-[var(--color-accent)] transition-colors"
           >
             Try again
+          </button>
+        )}
+        {phase === 'waiting' && (
+          <button
+            onClick={onCancel}
+            className="w-full py-2.5 px-4 rounded-lg border border-[var(--color-border)] text-[var(--color-muted-foreground)] text-sm font-medium hover:bg-[var(--color-accent)] transition-colors"
+          >
+            Cancel
           </button>
         )}
       </div>
@@ -714,7 +724,7 @@ export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) 
     void window.emailAPI.shell.openExternal(url)
   }, [])
 
-  const isConnecting = step === 'connecting' || step === 'oauth-connecting'
+  const isConnecting = step === 'connecting'
 
   return (
     <div
@@ -956,6 +966,7 @@ export function AddAccountWizard({ onClose, onSuccess }: AddAccountWizardProps) 
                   provider={provider}
                   onRetry={handleRetry}
                   onDone={handleDone}
+                  onCancel={handleRetry}
                 />
               </motion.div>
             )}
