@@ -65,12 +65,16 @@ const WIZARD_PROVIDERS: WizardProvider[] = [
     smtpHost: 'smtp.office365.com',
     smtpPort: '587',
     smtpSecurity: 'STARTTLS',
+    note: 'Sign into the Outlook account you\'re adding in your browser first before clicking the links below.',
     instructions: [
-      'Use your full Microsoft account email and regular password',
-      'If you have 2-factor authentication: go to account.microsoft.com → Security → Advanced security options → App passwords',
-      'Create one named "Email Hub" and use that password below',
+      'Enable IMAP — Outlook has it off by default (Step 1 link below)',
+      'Enter your Outlook email and regular password below',
+      'If you have 2-factor authentication, create an App Password instead of using your regular password',
     ],
-    helpLinks: [{ url: 'https://account.microsoft.com/security', text: 'Open Microsoft Account Security ↗' }],
+    helpLinks: [
+      { url: 'https://outlook.live.com/mail/0/options/mail/accounts/popImap', text: 'Step 1: Enable IMAP in Outlook Settings ↗' },
+      { url: 'https://account.microsoft.com/security', text: 'Step 2: App Password (only needed if you have 2FA) ↗' },
+    ],
   },
   {
     id: 'icloud',
