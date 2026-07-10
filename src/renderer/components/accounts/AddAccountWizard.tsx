@@ -21,7 +21,7 @@ interface ProviderOption {
 }
 
 const PROVIDERS: ProviderOption[] = [
-  { id: 'gmail', label: 'Gmail', description: 'Google personal & Workspace', authType: 'oauth', color: '#EA4335' },
+  { id: 'gmail', label: 'Gmail', description: 'Sign in with an App Password', authType: 'imap', color: '#EA4335' },
   { id: 'graph', label: 'Microsoft 365 / Outlook', description: 'Office 365 & Hotmail', authType: 'oauth', color: '#0078D4' },
   { id: 'icloud', label: 'iCloud Mail', description: 'Apple iCloud email', authType: 'imap', color: '#1D7AE0' },
   { id: 'yahoo', label: 'Yahoo Mail', description: 'Yahoo & AOL Mail', authType: 'imap', color: '#720E9E' },
@@ -52,6 +52,15 @@ export function AddAccountWizard({ onClose, onSuccess, onGoToSettings }: AddAcco
     setSelectedProvider(provider)
     setStep('auth')
     setError(null)
+    if (provider.authType === 'imap') {
+      setImapForm((f) => ({
+        ...f,
+        username: '',
+        password: '',
+        host: defaultImapHost(provider.id),
+        smtpHost: defaultSmtpHost(provider.id),
+      }))
+    }
   }
 
   const handleOAuthConnect = useCallback(async () => {
@@ -233,14 +242,24 @@ export function AddAccountWizard({ onClose, onSuccess, onGoToSettings }: AddAcco
                 </div>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-sm text-[var(--color-muted-foreground)] mb-2">
-                    Enter your {selectedProvider.label} credentials.
-                    {selectedProvider.id === 'icloud' && (
-                      <span className="block mt-1 text-xs">
-                        Use an app-specific password from appleid.apple.com
-                      </span>
-                    )}
-                  </p>
+                  {selectedProvider.id === 'gmail' ? (
+                    <div className="mb-3 p-3 rounded-[var(--radius-md)] bg-[var(--color-muted)] text-xs text-[var(--color-muted-foreground)] space-y-1">
+                      <p className="font-medium text-[var(--color-foreground)]">You need a Gmail App Password</p>
+                      <p>1. Go to <span className="font-mono">myaccount.google.com/apppasswords</span></p>
+                      <p>2. Create one called "Email Hub" — you'll get a 16-character code</p>
+                      <p>3. Use that code as your password below (not your normal password)</p>
+                      <p className="text-[10px] mt-1">Works for any Gmail or Google Workspace account instantly.</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-[var(--color-muted-foreground)] mb-2">
+                      Enter your {selectedProvider.label} credentials.
+                      {selectedProvider.id === 'icloud' && (
+                        <span className="block mt-1 text-xs">
+                          Use an app-specific password from appleid.apple.com
+                        </span>
+                      )}
+                    </p>
+                  )}
                   <FormField
                     label="Email / Username"
                     type="email"
@@ -354,6 +373,7 @@ export function AddAccountWizard({ onClose, onSuccess, onGoToSettings }: AddAcco
 
 function defaultImapHost(provider: string): string {
   const hosts: Record<string, string> = {
+    gmail: 'imap.gmail.com',
     icloud: 'imap.mail.me.com',
     yahoo: 'imap.mail.yahoo.com',
     aol: 'imap.aol.com',
@@ -366,6 +386,7 @@ function defaultImapHost(provider: string): string {
 
 function defaultSmtpHost(provider: string): string {
   const hosts: Record<string, string> = {
+    gmail: 'smtp.gmail.com',
     icloud: 'smtp.mail.me.com',
     yahoo: 'smtp.mail.yahoo.com',
     aol: 'smtp.aol.com',
