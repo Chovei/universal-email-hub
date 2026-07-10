@@ -266,6 +266,7 @@ function ConnectingStep({
 }) {
   const [phase, setPhase] = useState<ConnectPhase>('verifying')
   const [errorMsg, setErrorMsg] = useState('')
+  const [errorDetail, setErrorDetail] = useState('')
   const [errorStep, setErrorStep] = useState(0)
   const [syncedCount, setSyncedCount] = useState(0)
 
@@ -297,6 +298,7 @@ function ConnectingStep({
 
       if (!vRes.data?.success) {
         setErrorMsg(vRes.data?.error ?? vRes.error?.message ?? 'Connection failed')
+        setErrorDetail(vRes.data?.detail ?? '')
         setErrorStep(0)
         setPhase('error')
         return
@@ -390,8 +392,11 @@ function ConnectingStep({
       </div>
 
       {isError && (
-        <div className="bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-600 dark:text-red-400">
-          {errorMsg}
+        <div className="bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-600 dark:text-red-400 flex flex-col gap-1.5">
+          <span>{errorMsg}</span>
+          {errorDetail && (
+            <span className="text-xs opacity-60 font-mono break-all">{errorDetail}</span>
+          )}
         </div>
       )}
 

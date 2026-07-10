@@ -151,7 +151,7 @@ export function registerAccountHandlers(): void {
       } else if (/certificate|SSL|TLS/i.test(msg)) {
         msg = 'SSL/TLS error — try changing the security setting'
       }
-      return { data: { success: false, error: msg } }
+      return { data: { success: false, error: msg, detail: result.error } }
     } catch (err) {
       return { error: { code: 'VERIFY_ERROR', message: String(err) } }
     }

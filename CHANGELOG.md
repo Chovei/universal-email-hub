@@ -6,6 +6,12 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-07-10
+
+### Fixed
+
+- **Connection error now shows raw server response** — the error box in the wizard shows the exact message the mail server returned (in small text below the friendly error), making it possible to diagnose provider-specific auth failures
+
 ## [0.1.7] - 2026-07-10
 
 ### Fixed
