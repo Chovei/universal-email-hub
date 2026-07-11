@@ -10,6 +10,10 @@ import { useMailboxStore } from '../../stores/mailboxStore'
 import { useAccountStore } from '../../stores/accountStore'
 import { useUIStore } from '../../stores/uiStore'
 import { useSelectionStore, selectIsSelectionMode, selectSelectedCount } from '../../stores/selectionStore'
+import { FolderActionBar } from '../folder/FolderActionBar'
+import { useFolders } from '../../hooks/useFolders'
+import type { FolderRow } from '@shared/types/db'
+import type { FolderAction } from '@shared/types/ipc'
 
 const ITEM_HEIGHT = { compact: 68, comfortable: 88, spacious: 108 }
 
@@ -23,11 +27,12 @@ function isTypingTarget(t: EventTarget | null): boolean {
 
 interface ThreadListProps {
   className?: string
+  onFolderAction?: (action: FolderAction, folder: FolderRow) => void
 }
 
-export function ThreadList({ className }: ThreadListProps) {
+export function ThreadList({ className, onFolderAction }: ThreadListProps) {
   const { activeAccountId } = useAccountStore()
-  const { selectedFolderType, selectedThreadId, selectThread } = useMailboxStore()
+  const { selectedFolderType, selectedThreadId, selectThread, selectedFolderId, selectedFolderAccountId } = useMailboxStore()
   const { density } = useUIStore()
   const parentRef = useRef<HTMLDivElement>(null)
 
@@ -37,10 +42,16 @@ export function ThreadList({ className }: ThreadListProps) {
   const singleAccountId = activeAccountId === 'unified' ? null : activeAccountId
   const isStarred = selectedFolderType === 'starred'
 
+  const { folders } = useFolders(selectedFolderAccountId ?? '')
+  const currentFolder = selectedFolderId
+    ? folders.find((f) => f.id === selectedFolderId) ?? null
+    : null
+
   const { threads, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useMessages({
-    accountId: singleAccountId ?? undefined,
-    folderType: isStarred ? undefined : selectedFolderType,
-    starredOnly: isStarred ? true : undefined,
+    accountId: selectedFolderId ? selectedFolderAccountId ?? undefined : singleAccountId ?? undefined,
+    folderId: selectedFolderId ?? undefined,
+    folderType: selectedFolderId ? undefined : (isStarred ? undefined : selectedFolderType),
+    starredOnly: !selectedFolderId && isStarred ? true : undefined,
     limit: 50,
   })
 
@@ -121,7 +132,18 @@ export function ThreadList({ className }: ThreadListProps) {
   if (isLoading) {
     return (
       <div className={cn('flex flex-col h-full bg-[var(--color-background)]', className)}>
-        <ThreadListHeader threadCount={0} isLoading />
+        <ThreadListHeader threadCount={0} isLoading folder={currentFolder} />
+        {currentFolder && (
+          <FolderActionBar
+            folder={currentFolder}
+            onAction={(action) => onFolderAction?.(action, currentFolder)}
+            onSync={() => {
+              if (selectedFolderAccountId) {
+                void window.emailAPI.sync.force(selectedFolderAccountId)
+              }
+            }}
+          />
+        )}
         {Array.from({ length: 8 }).map((_, i) => <ThreadItemSkeleton key={i} />)}
       </div>
     )
@@ -129,7 +151,19 @@ export function ThreadList({ className }: ThreadListProps) {
 
   return (
     <div className={cn('flex flex-col h-full bg-[var(--color-background)]', className)}>
-      <ThreadListHeader threadCount={threads.length} isLoading={false} />
+      <ThreadListHeader threadCount={threads.length} isLoading={false} folder={currentFolder} />
+
+      {currentFolder && (
+        <FolderActionBar
+          folder={currentFolder}
+          onAction={(action) => onFolderAction?.(action, currentFolder)}
+          onSync={() => {
+            if (selectedFolderAccountId) {
+              void window.emailAPI.sync.force(selectedFolderAccountId)
+            }
+          }}
+        />
+      )}
 
       {threads.length === 0 ? (
         <EmptyState />
@@ -170,10 +204,19 @@ export function ThreadList({ className }: ThreadListProps) {
   )
 }
 
-function ThreadListHeader({ threadCount, isLoading }: { threadCount: number; isLoading: boolean }) {
+function ThreadListHeader({
+  threadCount,
+  isLoading,
+  folder,
+}: {
+  threadCount: number
+  isLoading: boolean
+  folder?: FolderRow | null
+}) {
   const { selectedFolderType } = useMailboxStore()
   const selectedCount = useSelectionStore(selectSelectedCount)
-  const folderLabel = selectedFolderType.charAt(0).toUpperCase() + selectedFolderType.slice(1)
+  const folderLabel = folder?.name
+    ?? (selectedFolderType.charAt(0).toUpperCase() + selectedFolderType.slice(1))
 
   return (
     <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-background)] shrink-0">
