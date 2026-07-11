@@ -31,7 +31,7 @@ const GMAIL_SCOPES = [
   'https://www.googleapis.com/auth/userinfo.profile',
 ]
 
-const SYSTEM_FOLDER_LABELS = new Set(['INBOX', 'SENT', 'DRAFTS', 'TRASH', 'SPAM'])
+const SYSTEM_FOLDER_LABELS = new Set(['INBOX', 'SENT', 'DRAFTS', 'TRASH', 'SPAM', 'ALLMAIL'])
 
 // These system labels are markers, not folders — exclude from folder list
 const NON_FOLDER_LABELS = new Set([
@@ -47,7 +47,7 @@ function mapLabelType(labelId: string): FolderType {
     DRAFTS: 'drafts',
     TRASH: 'trash',
     SPAM: 'spam',
-    ALL_MAIL: 'archive',
+    ALLMAIL: 'archive',
   }
   return map[labelId] ?? 'custom'
 }
