@@ -1,7 +1,7 @@
 import { useRef, useEffect, useCallback } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { RefreshCw, Inbox } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { ThreadItem } from './ThreadItem'
 import { ThreadItemSkeleton } from '../ui/Skeleton'
 import { cn } from '../../lib/utils'
@@ -9,9 +9,17 @@ import { useMessages } from '../../hooks/useMessages'
 import { useMailboxStore } from '../../stores/mailboxStore'
 import { useAccountStore } from '../../stores/accountStore'
 import { useUIStore } from '../../stores/uiStore'
-import type { ThreadRow } from '@shared/types/db'
+import { useSelectionStore, selectIsSelectionMode, selectSelectedCount } from '../../stores/selectionStore'
 
 const ITEM_HEIGHT = { compact: 68, comfortable: 88, spacious: 108 }
+
+function isTypingTarget(t: EventTarget | null): boolean {
+  return (
+    t instanceof HTMLInputElement ||
+    t instanceof HTMLTextAreaElement ||
+    (t instanceof HTMLElement && t.isContentEditable)
+  )
+}
 
 interface ThreadListProps {
   className?: string
@@ -23,9 +31,12 @@ export function ThreadList({ className }: ThreadListProps) {
   const { density } = useUIStore()
   const parentRef = useRef<HTMLDivElement>(null)
 
-  const singleAccountId = activeAccountId === 'unified' ? null : activeAccountId
+  const { selectedIds, anchorId, toggleOne, selectRange, selectAll, deselectAll } = useSelectionStore()
+  const isSelectionMode = useSelectionStore(selectIsSelectionMode)
 
+  const singleAccountId = activeAccountId === 'unified' ? null : activeAccountId
   const isStarred = selectedFolderType === 'starred'
+
   const { threads, isLoading, isFetchingNextPage, hasNextPage, fetchNextPage } = useMessages({
     accountId: singleAccountId ?? undefined,
     folderType: isStarred ? undefined : selectedFolderType,
@@ -42,14 +53,14 @@ export function ThreadList({ className }: ThreadListProps) {
     overscan: 10,
   })
 
-  // Infinite scroll — trigger at 80% scroll depth
+  // Derive ordered IDs for range selection from the current rendered list
+  const threadIds = threads.map((t) => t.id)
+
   const handleScroll = useCallback(() => {
     const el = parentRef.current
     if (!el || !hasNextPage || isFetchingNextPage) return
     const { scrollTop, scrollHeight, clientHeight } = el
-    if (scrollTop + clientHeight >= scrollHeight * 0.8) {
-      void fetchNextPage()
-    }
+    if (scrollTop + clientHeight >= scrollHeight * 0.8) void fetchNextPage()
   }, [hasNextPage, isFetchingNextPage, fetchNextPage])
 
   useEffect(() => {
@@ -59,19 +70,24 @@ export function ThreadList({ className }: ThreadListProps) {
     return () => el.removeEventListener('scroll', handleScroll)
   }, [handleScroll])
 
-  // Keyboard navigation
-  // M1: Guard against intercepting arrow keys when focus is inside an input,
-  //     textarea, or contenteditable (composer, search bar, etc.).
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      const target = e.target as HTMLElement | null
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target?.isContentEditable
-      ) return
+      if (isTypingTarget(e.target)) return
+
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+        e.preventDefault()
+        selectAll(threadIds)
+        return
+      }
+      if (e.key === 'Escape') {
+        deselectAll()
+        return
+      }
+      // Arrow navigation unchanged
       if (!threads.length) return
-      const current = selectedThreadId ? threads.findIndex((t) => t.id === selectedThreadId) : -1
+      const current = selectedThreadId
+        ? threads.findIndex((t) => t.id === selectedThreadId)
+        : -1
       if (e.key === 'ArrowDown') {
         e.preventDefault()
         const next = threads[current + 1]
@@ -84,15 +100,24 @@ export function ThreadList({ className }: ThreadListProps) {
     }
     window.addEventListener('keydown', handleKey)
     return () => window.removeEventListener('keydown', handleKey)
-  }, [threads, selectedThreadId, selectThread])
+  }, [threads, threadIds, selectedThreadId, selectThread, selectAll, deselectAll])
+
+  const handleBulkToggle = useCallback(
+    (id: string, e: React.MouseEvent) => {
+      if (e.shiftKey && anchorId) {
+        selectRange(anchorId, id, threadIds)
+      } else {
+        toggleOne(id)
+      }
+    },
+    [anchorId, threadIds, selectRange, toggleOne]
+  )
 
   if (isLoading) {
     return (
       <div className={cn('flex flex-col h-full bg-[var(--color-background)]', className)}>
         <ThreadListHeader threadCount={0} isLoading />
-        {Array.from({ length: 8 }).map((_, i) => (
-          <ThreadItemSkeleton key={i} />
-        ))}
+        {Array.from({ length: 8 }).map((_, i) => <ThreadItemSkeleton key={i} />)}
       </div>
     )
   }
@@ -105,33 +130,30 @@ export function ThreadList({ className }: ThreadListProps) {
         <EmptyState />
       ) : (
         <div ref={parentRef} className="flex-1 overflow-y-auto">
-          <div
-            style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}
-          >
+          <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const thread = threads[virtualItem.index]!
               return (
                 <div
                   key={virtualItem.key}
                   style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
+                    position: 'absolute', top: 0, left: 0, right: 0,
                     transform: `translateY(${virtualItem.start}px)`,
                   }}
                 >
                   <ThreadItem
                     thread={thread}
                     isSelected={selectedThreadId === thread.id}
+                    isBulkSelected={selectedIds.has(thread.id)}
+                    isSelectionMode={isSelectionMode}
                     density={density}
                     onClick={() => selectThread(thread.id)}
+                    onBulkToggle={handleBulkToggle}
                   />
                 </div>
               )
             })}
           </div>
-
           {isFetchingNextPage && (
             <div className="flex items-center justify-center py-4">
               <RefreshCw className="w-4 h-4 animate-spin text-[var(--color-muted-foreground)]" />
@@ -143,14 +165,9 @@ export function ThreadList({ className }: ThreadListProps) {
   )
 }
 
-function ThreadListHeader({
-  threadCount,
-  isLoading,
-}: {
-  threadCount: number
-  isLoading: boolean
-}) {
+function ThreadListHeader({ threadCount, isLoading }: { threadCount: number; isLoading: boolean }) {
   const { selectedFolderType } = useMailboxStore()
+  const selectedCount = useSelectionStore(selectSelectedCount)
   const folderLabel = selectedFolderType.charAt(0).toUpperCase() + selectedFolderType.slice(1)
 
   return (
@@ -159,7 +176,9 @@ function ThreadListHeader({
         <h2 className="text-sm font-semibold text-[var(--color-foreground)]">{folderLabel}</h2>
         {!isLoading && (
           <p className="text-[11px] text-[var(--color-muted-foreground)] mt-0.5">
-            {threadCount === 0 ? 'No messages' : `${threadCount} conversations`}
+            {selectedCount > 0
+              ? `${selectedCount.toLocaleString()} selected`
+              : threadCount === 0 ? 'No messages' : `${threadCount} conversations`}
           </p>
         )}
       </div>
@@ -169,7 +188,6 @@ function ThreadListHeader({
 
 function EmptyState() {
   const { selectedFolderType } = useMailboxStore()
-
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
