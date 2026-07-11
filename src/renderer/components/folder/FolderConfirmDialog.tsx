@@ -1,5 +1,4 @@
 import { motion } from 'framer-motion'
-import type { FolderRow } from '@shared/types/db'
 import type { PendingFolderAction } from '../../hooks/useFolderActions'
 
 const ACTION_COPY: Record<string, { title: string; verb: string }> = {
@@ -56,7 +55,7 @@ export function FolderConfirmDialog({ pending, onConfirm, onCancel }: FolderConf
               {isGlobal ? ' across all connected accounts' : ` in ${folder?.name ?? 'this folder'}`}.
             </p>
           )}
-          {storageEstimateMB > 0 && (
+          {count > 0 && (
             <p className="text-xs text-[var(--color-muted-foreground)]">
               Estimated storage recovered: ~{storageEstimateMB} MB
             </p>
