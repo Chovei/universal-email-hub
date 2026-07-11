@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   X, Archive, Trash2, MailOpen, Mail, Star, StarOff,
-  FolderInput, AlertTriangle, ShieldCheck, Download, Copy, MoreHorizontal,
+  AlertTriangle, ShieldCheck, MoreHorizontal,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useSelectionStore, selectIsSelectionMode } from '../../stores/selectionStore'
@@ -18,15 +18,14 @@ const PRIMARY: { action: BulkAction; icon: React.ReactNode; label: string; destr
   { action: 'markRead', icon: <MailOpen className="w-4 h-4" />, label: 'Read' },
   { action: 'markUnread', icon: <Mail className="w-4 h-4" />, label: 'Unread' },
   { action: 'star', icon: <Star className="w-4 h-4" />, label: 'Star' },
-  { action: 'move', icon: <FolderInput className="w-4 h-4" />, label: 'Move' },
+  // I1: 'move' removed until a folder picker exists — dispatching it always failed
 ]
 
 const MORE: { action: BulkAction; icon: React.ReactNode; label: string; destructive?: boolean }[] = [
   { action: 'unstar', icon: <StarOff className="w-4 h-4" />, label: 'Unstar' },
   { action: 'spam', icon: <AlertTriangle className="w-4 h-4" />, label: 'Spam', destructive: true },
   { action: 'notSpam', icon: <ShieldCheck className="w-4 h-4" />, label: 'Not Spam' },
-  { action: 'copy', icon: <Copy className="w-4 h-4" />, label: 'Copy to…' },
-  { action: 'export', icon: <Download className="w-4 h-4" />, label: 'Export' },
+  // I2: 'copy' and 'export' removed — not implemented in the engine yet
 ]
 
 export function BulkActionBar({ onAction }: BulkActionBarProps) {

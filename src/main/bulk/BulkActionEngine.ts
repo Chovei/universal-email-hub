@@ -16,8 +16,9 @@ import {
   getMessagesByThreadIds,
   type MessageSummary,
 } from '../db/queries/messages'
-import { getFolderByType } from '../db/queries/folders'
-import { updateThreadStar } from '../db/queries/threads'
+import { getFolderByType, getFolderById } from '../db/queries/folders'
+import { updateThreadStar, updateThreadCounts, getThreadById } from '../db/queries/threads'
+import { SyncEngine } from '../sync/SyncEngine'
 
 const DB_BATCH_SIZE = 500
 const UNDO_LIMIT = 10_000
@@ -142,6 +143,15 @@ export class BulkActionEngine {
           pendingUndo.threadIds.push(...threadIds)
         }
         markMessagesRead(messageIds, read)
+        // C3: keep thread-level unread counts in sync — all messages of each
+        // thread are in msgs, so unread is 0 (read) or the full count (unread)
+        const perThread = new Map<string, number>()
+        for (const m of msgs) perThread.set(m.threadId, (perThread.get(m.threadId) ?? 0) + 1)
+        for (const [threadId, count] of perThread) {
+          updateThreadCounts(threadId, read ? 0 : count, count)
+        }
+        // C1: best-effort provider sync
+        this.propagateToProvider(msgs, (e, aid, rids) => e.markMessagesRead(aid, rids, read))
         break
       }
 
@@ -149,11 +159,18 @@ export class BulkActionEngine {
       case 'unstar': {
         const starred = action === 'star'
         if (pendingUndo) {
-          for (const m of msgs) pendingUndo.previousStarState[m.threadId] = m.isStarred
+          // I3: undo restores thread-level star state, so capture it from the
+          // threads table — message-level state is last-message-wins and wrong
+          for (const id of threadIds) {
+            const thread = getThreadById(id)
+            if (thread) pendingUndo.previousStarState[id] = thread.isStarred
+          }
           pendingUndo.threadIds.push(...threadIds)
         }
         starMessages(messageIds, starred)
         for (const id of threadIds) updateThreadStar(id, starred)
+        // C1: best-effort provider sync
+        this.propagateToProvider(msgs, (e, aid, rids) => e.starMessages(aid, rids, starred))
         break
       }
 
@@ -165,10 +182,15 @@ export class BulkActionEngine {
           }
           pendingUndo.threadIds.push(...threadIds)
         }
+        const syncEngine = SyncEngine.getInstance()
         for (const [accountId, accountMsgs] of byAccount) {
           const archiveFolder = getFolderByType(accountId, 'archive')
           if (archiveFolder) {
             moveMessages(accountMsgs.map((m) => m.id), archiveFolder.id)
+            // C1: best-effort provider sync
+            void syncEngine
+              .moveMessages(accountId, accountMsgs.map((m) => m.remoteId), archiveFolder.remoteId)
+              .catch(() => {})
           } else {
             markMessagesRead(accountMsgs.map((m) => m.id), true)
           }
@@ -186,6 +208,8 @@ export class BulkActionEngine {
             deleteMessages(accountMsgs.map((m) => m.id))
           }
         }
+        // C1: best-effort provider sync (remoteIds were captured in msgs above)
+        this.propagateToProvider(msgs, (e, aid, rids) => e.deleteRemoteMessages(aid, rids))
         break
       }
 
@@ -198,31 +222,51 @@ export class BulkActionEngine {
           pendingUndo.threadIds.push(...threadIds)
         }
         moveMessages(messageIds, options.targetFolderId)
+        // C1: best-effort provider sync — server-side move needs the folder's remoteId
+        const targetFolder = getFolderById(options.targetFolderId)
+        if (targetFolder) {
+          this.propagateToProvider(msgs, (e, aid, rids) => e.moveMessages(aid, rids, targetFolder.remoteId))
+        }
         break
       }
 
       case 'spam': {
         const byAccount = this.groupByAccount(msgs)
+        const syncEngine = SyncEngine.getInstance()
         for (const [accountId, accountMsgs] of byAccount) {
           const spamFolder = getFolderByType(accountId, 'spam')
-          if (spamFolder) moveMessages(accountMsgs.map((m) => m.id), spamFolder.id)
+          if (spamFolder) {
+            moveMessages(accountMsgs.map((m) => m.id), spamFolder.id)
+            // C1: best-effort provider sync
+            void syncEngine
+              .moveMessages(accountId, accountMsgs.map((m) => m.remoteId), spamFolder.remoteId)
+              .catch(() => {})
+          }
         }
         break
       }
 
       case 'notSpam': {
         const byAccount = this.groupByAccount(msgs)
+        const syncEngine = SyncEngine.getInstance()
         for (const [accountId, accountMsgs] of byAccount) {
           const inboxFolder = getFolderByType(accountId, 'inbox')
-          if (inboxFolder) moveMessages(accountMsgs.map((m) => m.id), inboxFolder.id)
+          if (inboxFolder) {
+            moveMessages(accountMsgs.map((m) => m.id), inboxFolder.id)
+            // C1: best-effort provider sync
+            void syncEngine
+              .moveMessages(accountId, accountMsgs.map((m) => m.remoteId), inboxFolder.remoteId)
+              .catch(() => {})
+          }
         }
         break
       }
 
       case 'export':
       case 'copy':
-        // Implemented in Task 10
-        break
+        // I2: not implemented yet — fail loudly so the batch surfaces in
+        // result.errors instead of silently "succeeding"
+        throw new Error(`${action} is not yet implemented`)
     }
   }
 
@@ -234,6 +278,24 @@ export class BulkActionEngine {
       map.set(m.accountId, list)
     }
     return map
+  }
+
+  // C1: fire-and-forget propagation to the provider, grouped by account.
+  // Errors are swallowed — the sync system reconciles on the next cycle.
+  private propagateToProvider(
+    msgs: MessageSummary[],
+    action: (engine: SyncEngine, accountId: string, remoteIds: string[]) => Promise<void>
+  ): void {
+    const engine = SyncEngine.getInstance()
+    const byAccount = new Map<string, string[]>()
+    for (const m of msgs) {
+      const list = byAccount.get(m.accountId) ?? []
+      list.push(m.remoteId)
+      byAccount.set(m.accountId, list)
+    }
+    for (const [accountId, remoteIds] of byAccount) {
+      void action(engine, accountId, remoteIds).catch(() => {})
+    }
   }
 
   cancel(operationId: string): void {
