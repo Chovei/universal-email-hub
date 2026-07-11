@@ -20,6 +20,11 @@ function getActions(folder: FolderRow): ActionDef[] {
   if (folder.type === 'spam') {
     return [{ action: 'emptySpam', label: 'Empty Spam', icon: <AlertTriangle className="w-3.5 h-3.5" />, destructive: true }]
   }
+  if (folder.type === 'sent' || folder.type === 'drafts') {
+    return [
+      { action: 'markAllRead' as FolderAction, label: 'Mark All Read', icon: <MailOpen className="w-3.5 h-3.5" /> },
+    ]
+  }
   const base: ActionDef[] = [
     { action: 'markAllRead', label: 'Mark All Read', icon: <MailOpen className="w-3.5 h-3.5" /> },
     { action: 'archiveAllRead', label: 'Archive All Read', icon: <Archive className="w-3.5 h-3.5" /> },
