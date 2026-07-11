@@ -149,7 +149,7 @@ function AccountItem({ account, isActive, onClick }: {
 
 interface SidebarProps {
   onAddAccount?: () => void
-  onFolderAction?: (action: FolderAction, folder?: FolderRow, accountId?: string) => void
+  onFolderAction: (action: FolderAction, folder?: FolderRow, accountId?: string) => void
 }
 
 export function Sidebar({ onAddAccount, onFolderAction }: SidebarProps) {
@@ -297,7 +297,7 @@ export function Sidebar({ onAddAccount, onFolderAction }: SidebarProps) {
                         <FolderTree
                           accountId={account.id}
                           onFolderAction={(action, folder) =>
-                            onFolderAction?.(action, folder, account.id)
+                            onFolderAction(action, folder, account.id)
                           }
                         />
                       )}
@@ -348,7 +348,7 @@ export function Sidebar({ onAddAccount, onFolderAction }: SidebarProps) {
                 if (action === null) {
                   void window.emailAPI.sync.force()
                 } else {
-                  onFolderAction?.(action, undefined, undefined)
+                  onFolderAction(action, undefined, undefined)
                 }
               }}
               className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-muted)] transition-colors"
