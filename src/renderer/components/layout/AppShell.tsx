@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { CommandPalette } from '../command-palette/CommandPalette'
@@ -12,12 +12,25 @@ import { useUIStore } from '../../stores/uiStore'
 import { useComposeStore } from '../../stores/composeStore'
 import { useAccountStore } from '../../stores/accountStore'
 import { useAccounts } from '../../hooks/useAccounts'
+import { BulkActionBar } from '../bulk/BulkActionBar'
+import { BulkProgressToast } from '../bulk/BulkProgressToast'
+import { useBulkOperation } from '../../hooks/useBulkOperation'
+import { useSelectionStore } from '../../stores/selectionStore'
+import type { BulkAction } from '@shared/types/ipc'
 
 export function AppShell() {
   const { activePanel, composerOpen, closeComposer: closeUIComposer, setActivePanel } = useUIStore()
   const { openComposer } = useComposeStore()
   const { accounts } = useAccountStore()
   const [showAddAccount, setShowAddAccount] = useState(false)
+
+  const { deselectAll } = useSelectionStore()
+  const { execute, cancel, undo, dismiss, progress, result, isRunning, lastAction } = useBulkOperation()
+
+  const handleBulkAction = useCallback((action: BulkAction, threadIds: string[]) => {
+    void execute({ action, threadIds })
+    deselectAll()
+  }, [execute, deselectAll])
 
   // Load accounts on mount
   useAccounts()
@@ -69,6 +82,18 @@ export function AppShell() {
           />
         )}
       </AnimatePresence>
+
+      {/* Bulk operation UI */}
+      <BulkActionBar onAction={handleBulkAction} />
+      <BulkProgressToast
+        progress={progress}
+        result={result}
+        isRunning={isRunning}
+        lastAction={lastAction}
+        onCancel={() => void cancel()}
+        onUndo={(token) => void undo(token)}
+        onDismiss={dismiss}
+      />
     </div>
   )
 }
