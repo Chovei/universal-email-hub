@@ -153,6 +153,27 @@ const WIZARD_PROVIDERS: WizardProvider[] = [
     ],
   },
   {
+    id: 'rambler',
+    label: 'Rambler Mail',
+    description: 'rambler.ru · lenta.ru · ro.ru',
+    color: '#F24C00',
+    passwordLabel: 'Password',
+    requiresAppPassword: false,
+    imapHost: 'imap.rambler.ru',
+    imapPort: '993',
+    imapSecurity: 'TLS',
+    smtpHost: 'smtp.rambler.ru',
+    smtpPort: '465',
+    smtpSecurity: 'TLS',
+    instructions: [
+      'Enter your Rambler.ru email address and password',
+      'If login fails, enable IMAP in Rambler settings: Settings → Email clients',
+    ],
+    helpLinks: [
+      { url: 'https://help.rambler.ru/mail/1400/', text: 'Rambler IMAP setup guide ↗' },
+    ],
+  },
+  {
     id: 'imap',
     label: 'Custom IMAP',
     description: 'Any IMAP / SMTP email server',

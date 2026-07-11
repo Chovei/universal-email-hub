@@ -164,7 +164,8 @@ export class SyncEngine {
       case 'zoho':
       case 'fastmail':
       case 'aol':
-      case 'gmx': {
+      case 'gmx':
+      case 'rambler': {
         try {
           provider = _credentials
             ? new ImapProvider(accountId, providerKind as ProviderKind, _credentials)

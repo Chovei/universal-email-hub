@@ -10,6 +10,7 @@ export type ProviderKind =
   | 'fastmail'
   | 'aol'
   | 'gmx'
+  | 'rambler'
 
 export interface ProviderMeta {
   kind: ProviderKind
@@ -156,5 +157,18 @@ export const PROVIDER_META: Record<ProviderKind, ProviderMeta> = {
     supportsIdle: true,
     supportsPush: false,
     iconId: 'gmx',
+  },
+  rambler: {
+    kind: 'rambler',
+    label: 'Rambler Mail',
+    color: '#F24C00',
+    authType: 'password',
+    defaultHost: 'imap.rambler.ru',
+    defaultPort: 993,
+    defaultSmtpHost: 'smtp.rambler.ru',
+    defaultSmtpPort: 465,
+    supportsIdle: true,
+    supportsPush: false,
+    iconId: 'rambler',
   },
 }
