@@ -198,6 +198,31 @@ export interface BulkQueryCriteria {
   newerThanDays?: number
 }
 
+// ── Folder management (Phase 8B) ──────────────────────────────────────────
+
+/**
+ * High-level folder operation. Maps to a BulkAction + BulkQueryCriteria pair
+ * on the main process — the renderer never handles the thread IDs directly.
+ */
+export type FolderAction =
+  | 'emptyTrash'      // delete all in trash
+  | 'emptySpam'       // delete all in spam
+  | 'markAllRead'     // markRead all unread in folder
+  | 'markAllUnread'   // markUnread all in folder
+  | 'archiveAllRead'  // archive all read messages in folder
+  | 'deleteAll'       // move all to trash (custom folders only)
+
+export interface FolderExecuteRequest {
+  operationId?: string
+  action: FolderAction
+  /** Local DB folder id — use when acting on a specific folder row */
+  folderId?: string
+  /** Folder type — use for cross-account type operations (e.g. 'trash') */
+  folderType?: string
+  /** Omit to affect all accounts */
+  accountId?: string
+}
+
 // ── Compose ────────────────────────────────────────────────────────────────
 
 export interface SendPayload {
@@ -304,6 +329,7 @@ export interface EmailAPI {
   // Folders
   folders: {
     list(accountId: string): Promise<FolderRow[]>
+    execute(req: FolderExecuteRequest): Promise<{ operationId: string } | { error: IpcError }>
     onUnreadChanged(cb: (payload: UnreadChangedPayload) => void): () => void
   }
 

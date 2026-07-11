@@ -27,6 +27,7 @@ const emailAPI: EmailAPI = {
 
   folders: {
     list: (accountId) => invoke(IPC.FOLDERS_LIST, accountId),
+    execute: (req) => invoke(IPC.FOLDER_EXECUTE, req),
     onUnreadChanged: (cb) => on(IPC.FOLDERS_UNREAD_CHANGED, cb as (...args: unknown[]) => void),
   },
 

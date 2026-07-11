@@ -103,6 +103,9 @@ export const IPC = {
   BULK_DONE: 'bulk:done',
   /** push: main → renderer */
   BULK_CANCELLED: 'bulk:cancelled',
+
+  // ── Folder management (Phase 8B) ──────────────────────────────────────────
+  FOLDER_EXECUTE: 'folder:execute',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]
