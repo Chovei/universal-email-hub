@@ -102,6 +102,11 @@ export function ThreadList({ className }: ThreadListProps) {
     return () => window.removeEventListener('keydown', handleKey)
   }, [threads, threadIds, selectedThreadId, selectThread, selectAll, deselectAll])
 
+  // Clear bulk selection when the user navigates to a different folder or account
+  useEffect(() => {
+    deselectAll()
+  }, [selectedFolderType, activeAccountId, deselectAll])
+
   const handleBulkToggle = useCallback(
     (id: string, e: React.MouseEvent) => {
       if (e.shiftKey && anchorId) {

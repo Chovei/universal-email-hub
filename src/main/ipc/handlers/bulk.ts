@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron'
+import { ipcMain, BrowserWindow } from 'electron'
 import { z } from 'zod'
 import { randomUUID } from 'crypto'
 import { IPC } from '@shared/constants/ipc-channels'
@@ -46,7 +46,20 @@ export function registerBulkHandlers(): void {
       const parsed = BulkExecuteSchema.parse(payload)
       const operationId = parsed.operationId ?? randomUUID()
       const req: BulkRequest = { ...parsed, operationId }
-      void engine.execute(req) // fire-and-forget; progress via push events
+      engine.execute(req).catch((err: unknown) => {
+        // If execute() itself throws (e.g. DB down before first batch), no BULK_DONE
+        // event will ever arrive — push a terminal failure so the renderer exits loading
+        const failResult: import('@shared/types/ipc').BulkResult = {
+          operationId,
+          action: req.action,
+          succeeded: 0,
+          failed: req.threadIds.length,
+          errors: [String(err)],
+        }
+        BrowserWindow.getAllWindows().forEach((w) => {
+          if (!w.isDestroyed()) w.webContents.send(IPC.BULK_DONE, failResult)
+        })
+      })
       return { data: { operationId } }
     } catch (err) {
       return { error: { code: 'BULK_EXECUTE_FAILED', message: String(err) } }

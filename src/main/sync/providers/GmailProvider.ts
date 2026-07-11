@@ -47,6 +47,7 @@ function mapLabelType(labelId: string): FolderType {
     DRAFTS: 'drafts',
     TRASH: 'trash',
     SPAM: 'spam',
+    ALL_MAIL: 'archive',
   }
   return map[labelId] ?? 'custom'
 }

@@ -63,7 +63,8 @@ export function useBulkOperation() {
   const undo = useCallback(async (undoToken: string) => {
     await window.emailAPI.bulk.undo(undoToken)
     setResult(null)
-  }, [])
+    void queryClient.invalidateQueries({ queryKey: ['messages'] })
+  }, [queryClient])
 
   const dismiss = useCallback(() => setResult(null), [])
 

@@ -17,6 +17,7 @@ import {
   type MessageSummary,
 } from '../db/queries/messages'
 import { getFolderByType, getFolderById } from '../db/queries/folders'
+import { getAccountById } from '../db/queries/accounts'
 import { updateThreadStar, updateThreadCounts, getThreadById } from '../db/queries/threads'
 import { SyncEngine } from '../sync/SyncEngine'
 
@@ -200,16 +201,25 @@ export class BulkActionEngine {
 
       case 'delete': {
         const byAccount = this.groupByAccount(msgs)
+        const syncEngine = SyncEngine.getInstance()
         for (const [accountId, accountMsgs] of byAccount) {
           const trashFolder = getFolderByType(accountId, 'trash')
+          const remoteIds = accountMsgs.map((m) => m.remoteId)
           if (trashFolder) {
             moveMessages(accountMsgs.map((m) => m.id), trashFolder.id)
+            // Move remotely to trash — correct for all providers:
+            // Gmail uses messages.trash() internally, Graph soft-deletes, IMAP moves to Trash mailbox
+            void syncEngine.moveMessages(accountId, remoteIds, trashFolder.remoteId).catch(() => {})
           } else {
             deleteMessages(accountMsgs.map((m) => m.id))
+            // IMAP UIDs are mailbox-scoped; without a trash folder we cannot safely
+            // target the right mailbox, so skip remote delete to avoid expunging wrong messages
+            const account = getAccountById(accountId)
+            if (account && account.provider !== 'imap') {
+              void syncEngine.deleteRemoteMessages(accountId, remoteIds).catch(() => {})
+            }
           }
         }
-        // C1: best-effort provider sync (remoteIds were captured in msgs above)
-        this.propagateToProvider(msgs, (e, aid, rids) => e.deleteRemoteMessages(aid, rids))
         break
       }
 
@@ -317,6 +327,20 @@ export class BulkActionEngine {
         byState.set(wasRead, list)
       }
       for (const [wasRead, ids] of byState) markMessagesRead(ids, wasRead)
+      // I-1: restore thread-level unread counts — the forward path updated them,
+      // undo must reverse that update
+      const allMsgs = getMessagesByThreadIds(record.threadIds)
+      const perThread = new Map<string, { total: number; unread: number }>()
+      for (const m of allMsgs) {
+        const wasUnread = previousReadState[m.id] === false
+        const entry = perThread.get(m.threadId) ?? { total: 0, unread: 0 }
+        entry.total++
+        if (wasUnread) entry.unread++
+        perThread.set(m.threadId, entry)
+      }
+      for (const [threadId, { total, unread }] of perThread) {
+        updateThreadCounts(threadId, unread, total)
+      }
     }
 
     if (action === 'archive' || action === 'move') {
