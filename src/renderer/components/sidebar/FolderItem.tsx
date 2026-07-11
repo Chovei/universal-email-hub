@@ -177,6 +177,21 @@ function buildMenuGroups(
     ]
   }
 
-  // sent, drafts — just read actions
+  // sent, drafts — only markAllRead (markAllUnread not applicable)
+  if (folder.type === 'sent' || folder.type === 'drafts') {
+    return [
+      {
+        items: [
+          {
+            label: 'Mark All Read',
+            icon: <MailOpen className="w-3.5 h-3.5" />,
+            onClick: () => onAction('markAllRead'),
+          },
+        ],
+      },
+    ]
+  }
+
+  // Remaining types (inbox, archive, etc.) — full read actions
   return [readActions]
 }
