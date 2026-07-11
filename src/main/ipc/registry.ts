@@ -10,6 +10,7 @@ import { registerShellHandlers } from './handlers/shell'
 import { registerUpdaterHandlers } from './handlers/updater'
 import { registerVerificationHandlers } from './handlers/verificationCodes'
 import { registerBulkHandlers } from './handlers/bulk'
+import { registerFolderActionHandlers } from './handlers/folder-actions'
 
 export function registerAllIpcHandlers(): void {
   registerAccountHandlers()
@@ -24,4 +25,5 @@ export function registerAllIpcHandlers(): void {
   registerUpdaterHandlers()
   registerVerificationHandlers()
   registerBulkHandlers()
+  registerFolderActionHandlers()
 }
