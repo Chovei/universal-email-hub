@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import {
   Inbox, Send, FileText, Trash2, AlertTriangle, Archive,
   Star, Settings, Plus, ChevronDown, ChevronRight,
-  Layers, Mail, ShieldCheck, Pencil,
+  Layers, Mail, ShieldCheck, Pencil, RefreshCw, MailOpen,
 } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { UnreadBadge } from '../ui/Badge'
@@ -13,7 +13,9 @@ import { useMailboxStore } from '../../stores/mailboxStore'
 import { useUIStore } from '../../stores/uiStore'
 import { useSyncStore } from '../../stores/syncStore'
 import { useVerificationCodes } from '../../hooks/useVerificationCodes'
-import type { AccountRow } from '@shared/types/db'
+import { FolderTree } from '../sidebar/FolderTree'
+import type { AccountRow, FolderRow } from '@shared/types/db'
+import type { FolderAction } from '@shared/types/ipc'
 
 const PROVIDER_LABELS: Record<string, string> = {
   gmail: 'Gmail',
@@ -147,9 +149,10 @@ function AccountItem({ account, isActive, onClick }: {
 
 interface SidebarProps {
   onAddAccount?: () => void
+  onFolderAction?: (action: FolderAction, folder?: FolderRow, accountId?: string) => void
 }
 
-export function Sidebar({ onAddAccount }: SidebarProps) {
+export function Sidebar({ onAddAccount, onFolderAction }: SidebarProps) {
   const { accounts, activeAccountId, setActiveAccount } = useAccountStore()
   const { selectedFolderType, setFolderType } = useMailboxStore()
   const { setActivePanel, activePanel, openComposer } = useUIStore()
@@ -280,22 +283,81 @@ export function Sidebar({ onAddAccount }: SidebarProps) {
                     </span>
                   </button>
                   {!collapsed && groupAccounts.map((account) => (
-                    <AccountItem
-                      key={account.id}
-                      account={account}
-                      isActive={activeAccountId === account.id}
-                      onClick={() => {
-                        setActiveAccount(account.id)
-                        setActivePanel('inbox')
-                        setFolderType('inbox')
-                      }}
-                    />
+                    <div key={account.id}>
+                      <AccountItem
+                        account={account}
+                        isActive={activeAccountId === account.id}
+                        onClick={() => {
+                          setActiveAccount(account.id)
+                          setActivePanel('inbox')
+                          setFolderType('inbox')
+                        }}
+                      />
+                      {activeAccountId === account.id && (
+                        <FolderTree
+                          accountId={account.id}
+                          onFolderAction={(action, folder) =>
+                            onFolderAction?.(action, folder, account.id)
+                          }
+                        />
+                      )}
+                    </div>
                   ))}
                 </div>
               )
             })}
           </>
         )}
+
+        {/* Manage All Accounts */}
+        <div className="h-px bg-[var(--color-sidebar-border)] my-2" />
+        <div className="px-1">
+          <p className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]">
+            Manage All
+          </p>
+          {[
+            {
+              label: 'Mark Everything Read',
+              icon: <MailOpen className="w-3.5 h-3.5" />,
+              action: 'markAllRead' as FolderAction,
+            },
+            {
+              label: 'Archive All Read',
+              icon: <Archive className="w-3.5 h-3.5" />,
+              action: 'archiveAllRead' as FolderAction,
+            },
+            {
+              label: 'Empty All Trash',
+              icon: <Trash2 className="w-3.5 h-3.5" />,
+              action: 'emptyTrash' as FolderAction,
+            },
+            {
+              label: 'Empty All Spam',
+              icon: <AlertTriangle className="w-3.5 h-3.5" />,
+              action: 'emptySpam' as FolderAction,
+            },
+            {
+              label: 'Refresh All Accounts',
+              icon: <RefreshCw className="w-3.5 h-3.5" />,
+              action: null,
+            },
+          ].map(({ label, icon, action }) => (
+            <button
+              key={label}
+              onClick={() => {
+                if (action === null) {
+                  void window.emailAPI.sync.force()
+                } else {
+                  onFolderAction?.(action, undefined, undefined)
+                }
+              }}
+              className="w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-[13px] text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-muted)] transition-colors"
+            >
+              <span className="shrink-0 opacity-60">{icon}</span>
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Bottom actions */}
