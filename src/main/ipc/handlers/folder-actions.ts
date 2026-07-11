@@ -19,10 +19,10 @@ const FolderExecuteSchema = z.object({
   accountId: z.string().optional(),
 })
 
+type MappedAction = { criteria: BulkQueryCriteria; bulkAction: BulkAction; options?: { skipTrash?: boolean } }
+
 /** Map a FolderAction to the BulkQueryCriteria and BulkAction to hand to the engine. */
-function mapFolderAction(
-  req: FolderExecuteRequest,
-): { criteria: BulkQueryCriteria; bulkAction: BulkAction } {
+function mapFolderAction(req: FolderExecuteRequest): MappedAction {
   const base: BulkQueryCriteria = {
     accountId: req.accountId,
     folderId: req.folderId,
@@ -31,10 +31,9 @@ function mapFolderAction(
 
   switch (req.action) {
     case 'emptyTrash':
-      // Cross-account: clear folderType override from base, use 'trash'
-      return { criteria: { accountId: req.accountId, folderType: 'trash' }, bulkAction: 'delete' }
+      return { criteria: { accountId: req.accountId, folderType: 'trash' }, bulkAction: 'delete', options: { skipTrash: true } }
     case 'emptySpam':
-      return { criteria: { accountId: req.accountId, folderType: 'spam' }, bulkAction: 'delete' }
+      return { criteria: { accountId: req.accountId, folderType: 'spam' }, bulkAction: 'delete', options: { skipTrash: true } }
     case 'markAllRead':
       return { criteria: { ...base, unreadOnly: true }, bulkAction: 'markRead' }
     case 'markAllUnread':
@@ -55,7 +54,7 @@ export function registerFolderActionHandlers(): void {
       const req = parsed as FolderExecuteRequest
       const operationId = req.operationId ?? randomUUID()
 
-      const { criteria, bulkAction } = mapFolderAction(req)
+      const { criteria, bulkAction, options } = mapFolderAction(req)
       const threadIds = engine.queryIds(criteria)
 
       if (threadIds.length === 0) {
@@ -74,7 +73,7 @@ export function registerFolderActionHandlers(): void {
         return { data: { operationId } }
       }
 
-      engine.execute({ operationId, action: bulkAction, threadIds }).catch((err: unknown) => {
+      engine.execute({ operationId, action: bulkAction, threadIds, options }).catch((err: unknown) => {
         const failResult = {
           operationId,
           action: bulkAction,

@@ -203,12 +203,10 @@ export class BulkActionEngine {
         const byAccount = this.groupByAccount(msgs)
         const syncEngine = SyncEngine.getInstance()
         for (const [accountId, accountMsgs] of byAccount) {
-          const trashFolder = getFolderByType(accountId, 'trash')
           const remoteIds = accountMsgs.map((m) => m.remoteId)
+          const trashFolder = options.skipTrash ? null : getFolderByType(accountId, 'trash')
           if (trashFolder) {
             moveMessages(accountMsgs.map((m) => m.id), trashFolder.id)
-            // Move remotely to trash — correct for all providers:
-            // Gmail uses messages.trash() internally, Graph soft-deletes, IMAP moves to Trash mailbox
             void syncEngine.moveMessages(accountId, remoteIds, trashFolder.remoteId).catch(() => {})
           } else {
             deleteMessages(accountMsgs.map((m) => m.id))

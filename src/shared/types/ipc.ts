@@ -155,6 +155,7 @@ export interface BulkRequest {
     targetAccountId?: string
     exportFormat?: 'eml' | 'csv'
     exportPath?: string
+    skipTrash?: boolean
   }
 }
 
