@@ -658,10 +658,25 @@ export class GmailProvider extends BaseProvider {
     await gmail.users.drafts.delete({ userId: 'me', id: remoteId })
   }
 
+  // Run per-message API calls to completion even when some fail, then report
+  // partial failures as one aggregate error instead of aborting the batch.
+  private async settleAll(operation: string, promises: Promise<unknown>[]): Promise<void> {
+    const results = await Promise.allSettled(promises)
+    const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
+    if (failures.length > 0) {
+      const first = failures[0].reason
+      const detail = first instanceof Error ? first.message : String(first)
+      throw new Error(
+        `Gmail ${operation}: ${failures.length}/${results.length} message(s) failed — first error: ${detail}`
+      )
+    }
+  }
+
   async markRead(refs: RemoteMessageRef[], read: boolean): Promise<void> {
     const client = await this.getClient()
     const gmail = google.gmail({ version: 'v1', auth: client })
-    await Promise.all(
+    await this.settleAll(
+      'markRead',
       refs.map(({ remoteId: id }) =>
         gmail.users.messages.modify({
           userId: 'me',
@@ -678,7 +693,8 @@ export class GmailProvider extends BaseProvider {
   async star(refs: RemoteMessageRef[], starred: boolean): Promise<void> {
     const client = await this.getClient()
     const gmail = google.gmail({ version: 'v1', auth: client })
-    await Promise.all(
+    await this.settleAll(
+      'star',
       refs.map(({ remoteId: id }) =>
         gmail.users.messages.modify({
           userId: 'me',
@@ -695,7 +711,8 @@ export class GmailProvider extends BaseProvider {
   async moveMessages(refs: RemoteMessageRef[], targetFolderRemoteId: string): Promise<void> {
     const client = await this.getClient()
     const gmail = google.gmail({ version: 'v1', auth: client })
-    await Promise.all(
+    await this.settleAll(
+      'move',
       refs.map(({ remoteId: id }) =>
         gmail.users.messages.modify({
           userId: 'me',
@@ -712,13 +729,17 @@ export class GmailProvider extends BaseProvider {
   async deleteMessages(refs: RemoteMessageRef[]): Promise<void> {
     const client = await this.getClient()
     const gmail = google.gmail({ version: 'v1', auth: client })
-    await Promise.all(refs.map(({ remoteId: id }) => gmail.users.messages.trash({ userId: 'me', id })))
+    await this.settleAll(
+      'delete',
+      refs.map(({ remoteId: id }) => gmail.users.messages.trash({ userId: 'me', id }))
+    )
   }
 
   async addLabels(refs: RemoteMessageRef[], labels: string[]): Promise<void> {
     const client = await this.getClient()
     const gmail = google.gmail({ version: 'v1', auth: client })
-    await Promise.all(
+    await this.settleAll(
+      'addLabels',
       refs.map(({ remoteId: id }) =>
         gmail.users.messages.modify({ userId: 'me', id, requestBody: { addLabelIds: labels } })
       )
@@ -728,7 +749,8 @@ export class GmailProvider extends BaseProvider {
   async removeLabels(refs: RemoteMessageRef[], labels: string[]): Promise<void> {
     const client = await this.getClient()
     const gmail = google.gmail({ version: 'v1', auth: client })
-    await Promise.all(
+    await this.settleAll(
+      'removeLabels',
       refs.map(({ remoteId: id }) =>
         gmail.users.messages.modify({ userId: 'me', id, requestBody: { removeLabelIds: labels } })
       )

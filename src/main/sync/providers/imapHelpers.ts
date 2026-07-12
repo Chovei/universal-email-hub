@@ -1,0 +1,99 @@
+import type { FolderType, RemoteMessageRef } from '@shared/types/provider'
+
+// Pure IMAP helpers with no runtime dependencies — kept separate from
+// ImapProvider (which pulls in imapflow/electron) so they stay unit-testable.
+
+// ── Folder type mapping ───────────────────────────────────────────────────
+
+export function mapFolderType(name: string, specialUse?: string): FolderType {
+  const n = name.toUpperCase()
+  if (n === 'INBOX') return 'inbox'
+
+  const su = (specialUse ?? '').toLowerCase()
+  if (su.includes('sent')) return 'sent'
+  if (su.includes('draft')) return 'drafts'
+  if (su.includes('trash') || su.includes('deleted')) return 'trash'
+  if (su.includes('junk') || su.includes('spam')) return 'spam'
+  if (su.includes('archive')) return 'archive'
+  if (su.includes('all')) return 'archive'
+
+  // Fall back to name matching
+  if (n.includes('SENT')) return 'sent'
+  if (n.includes('DRAFT')) return 'drafts'
+  if (n.includes('TRASH') || n.includes('DELETED')) return 'trash'
+  if (n.includes('JUNK') || n.includes('SPAM')) return 'spam'
+  if (n.includes('ARCHIVE')) return 'archive'
+
+  return 'custom'
+}
+
+// ── IMAP cursor ────────────────────────────────────────────────────────────
+// Format: "{uidvalidity}:{highestUid}"
+
+export interface ImapCursor {
+  uidvalidity: number
+  highestUid: number
+}
+
+export function parseCursor(cursor: string | null): ImapCursor | null {
+  if (!cursor) return null
+  const [v, u] = cursor.split(':').map(Number)
+  if (!v || !u || isNaN(v) || isNaN(u)) return null
+  return { uidvalidity: v, highestUid: u }
+}
+
+export function encodeCursor(uidvalidity: number, highestUid: number): string {
+  return `${uidvalidity}:${highestUid}`
+}
+
+// ── Folder-scoped ref grouping ─────────────────────────────────────────────
+// IMAP UIDs are only unique within a mailbox. Refs without folder context
+// are counted as skipped rather than guessed — operating on a UID in the
+// wrong mailbox can silently mutate an unrelated message.
+
+export interface GroupedRefs {
+  byFolder: Map<string, string[]>
+  skipped: number
+}
+
+export function groupRefsByFolder(refs: RemoteMessageRef[]): GroupedRefs {
+  const byFolder = new Map<string, string[]>()
+  let skipped = 0
+  for (const ref of refs) {
+    if (!ref.folderRemoteId) {
+      skipped++
+      continue
+    }
+    const list = byFolder.get(ref.folderRemoteId) ?? []
+    list.push(ref.remoteId)
+    byFolder.set(ref.folderRemoteId, list)
+  }
+  return { byFolder, skipped }
+}
+
+// ── Attachment matching ────────────────────────────────────────────────────
+// remoteRef format: "{uid}:{key}" where key is the checksum/filename recorded
+// at sync time (see ImapProvider.parseFetchMessage).
+
+export interface AttachmentLike {
+  checksum?: string
+  filename?: string
+  content?: Buffer
+}
+
+export function parseAttachmentRef(remoteRef: string): { uid: string; key: string } {
+  const sep = remoteRef.indexOf(':')
+  if (sep === -1) return { uid: remoteRef, key: '' }
+  return { uid: remoteRef.slice(0, sep), key: remoteRef.slice(sep + 1) }
+}
+
+export function findAttachmentByKey<T extends AttachmentLike>(
+  attachments: T[],
+  key: string
+): T | undefined {
+  // Match by the same key formula used at sync time
+  const match = attachments.find((att) => (att.checksum ?? att.filename ?? 'att') === key)
+  if (match) return match
+  // Legacy refs (pre-fix) may not match; fall back to filename
+  return attachments.find((att) => att.filename === key)
+}

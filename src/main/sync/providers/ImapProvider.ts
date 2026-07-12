@@ -14,10 +14,17 @@ import type {
   AddressObject,
   Draft,
   PushConfig,
-  FolderType,
   RemoteMessageRef,
 } from '@shared/types/provider'
 import type { ProviderKind } from '@shared/constants/providers'
+import {
+  mapFolderType,
+  parseCursor,
+  encodeCursor,
+  groupRefsByFolder,
+  parseAttachmentRef,
+  findAttachmentByKey,
+} from './imapHelpers'
 
 // ── Credential storage ────────────────────────────────────────────────────
 
@@ -31,30 +38,6 @@ function loadImapCredentials(accountId: string): BasicCredentials {
   return JSON.parse(raw) as BasicCredentials
 }
 
-// ── Folder type mapping ───────────────────────────────────────────────────
-
-function mapFolderType(name: string, specialUse?: string): FolderType {
-  const n = name.toUpperCase()
-  if (n === 'INBOX') return 'inbox'
-
-  const su = (specialUse ?? '').toLowerCase()
-  if (su.includes('sent')) return 'sent'
-  if (su.includes('draft')) return 'drafts'
-  if (su.includes('trash') || su.includes('deleted')) return 'trash'
-  if (su.includes('junk') || su.includes('spam')) return 'spam'
-  if (su.includes('archive')) return 'archive'
-  if (su.includes('all')) return 'archive'
-
-  // Fall back to name matching
-  if (n.includes('SENT')) return 'sent'
-  if (n.includes('DRAFT')) return 'drafts'
-  if (n.includes('TRASH') || n.includes('DELETED')) return 'trash'
-  if (n.includes('JUNK') || n.includes('SPAM')) return 'spam'
-  if (n.includes('ARCHIVE')) return 'archive'
-
-  return 'custom'
-}
-
 // ── Address helpers ────────────────────────────────────────────────────────
 
 function toAddressObjects(
@@ -64,25 +47,6 @@ function toAddressObjects(
   return addrs
     .filter((a): a is { name?: string; address: string } => !!a.address)
     .map((a) => ({ name: a.name ?? undefined, address: a.address! }))
-}
-
-// ── IMAP cursor ────────────────────────────────────────────────────────────
-// Format: "{uidvalidity}:{highestUid}"
-
-interface ImapCursor {
-  uidvalidity: number
-  highestUid: number
-}
-
-function parseCursor(cursor: string | null): ImapCursor | null {
-  if (!cursor) return null
-  const [v, u] = cursor.split(':').map(Number)
-  if (!v || !u || isNaN(v) || isNaN(u)) return null
-  return { uidvalidity: v, highestUid: u }
-}
-
-function encodeCursor(uidvalidity: number, highestUid: number): string {
-  return `${uidvalidity}:${highestUid}`
 }
 
 // ── ImapProvider ──────────────────────────────────────────────────────────
@@ -131,32 +95,17 @@ export class ImapProvider extends BaseProvider {
   // are skipped (and logged) rather than guessed: operating on a UID in the
   // wrong mailbox can silently mutate an unrelated message.
 
-  private groupRefsByFolder(refs: RemoteMessageRef[]): Map<string, string[]> {
-    const byFolder = new Map<string, string[]>()
-    let skipped = 0
-    for (const ref of refs) {
-      if (!ref.folderRemoteId) {
-        skipped++
-        continue
-      }
-      const list = byFolder.get(ref.folderRemoteId) ?? []
-      list.push(ref.remoteId)
-      byFolder.set(ref.folderRemoteId, list)
-    }
-    if (skipped > 0) {
-      console.warn(
-        `[ImapProvider:${this.accountId}] Skipped ${skipped} message ref(s) without folder context — remote state will reconcile on next sync`
-      )
-    }
-    return byFolder
-  }
-
   /** Open one connection, run `op` once per folder group with the mailbox locked. */
   private async withFolderGroups(
     refs: RemoteMessageRef[],
     op: (client: ImapFlow, uidSet: string) => Promise<void>
   ): Promise<void> {
-    const byFolder = this.groupRefsByFolder(refs)
+    const { byFolder, skipped } = groupRefsByFolder(refs)
+    if (skipped > 0) {
+      console.warn(
+        `[ImapProvider:${this.accountId}] Skipped ${skipped} message ref(s) without folder context — remote state will reconcile on next sync`
+      )
+    }
     if (byFolder.size === 0) return
 
     const client = this.makeClient()
@@ -491,10 +440,7 @@ export class ImapProvider extends BaseProvider {
     // extracting the requested part. remoteRef format: "{uid}:{key}" where
     // key is the same checksum/filename used when the ref was generated
     // during sync (see parseFetchMessage).
-    const sep = remoteRef.indexOf(':')
-    const uidStr = sep === -1 ? remoteRef : remoteRef.slice(0, sep)
-    const attKey = sep === -1 ? '' : remoteRef.slice(sep + 1)
-
+    const { uid: uidStr, key: attKey } = parseAttachmentRef(remoteRef)
     const mailbox = folderRemoteId ?? 'INBOX'
     const client = this.makeClient()
     try {
@@ -510,15 +456,8 @@ export class ImapProvider extends BaseProvider {
           const parsed = await simpleParser(msg.source)
           const attachments = parsed.attachments ?? []
 
-          // Match by the same key formula used at sync time
-          const match = attachments.find(
-            (att) => (att.checksum ?? att.filename ?? 'att') === attKey
-          )
+          const match = findAttachmentByKey(attachments, attKey)
           if (match?.content) return match.content
-
-          // Legacy refs (pre-fix) may not match; fall back to filename
-          const byName = attachments.find((att) => att.filename === attKey)
-          if (byName?.content) return byName.content
 
           throw new Error(
             `Attachment "${attKey}" not found in message ${uidStr} (${attachments.length} attachment(s) present)`

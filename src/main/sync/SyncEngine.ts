@@ -8,6 +8,7 @@ import { GraphProvider } from './providers/GraphProvider'
 import { ImapProvider } from './providers/ImapProvider'
 import type { BaseProvider } from './providers/BaseProvider'
 import { normalizeMessage } from './normalizer'
+import { describeSyncError } from './syncErrors'
 import { indexMessageBatch } from '../db/queries/search'
 import { NotificationService } from '../notifications/NotificationService'
 import {
@@ -370,7 +371,8 @@ export class SyncEngine {
       this.win?.webContents.send(IPC.WINDOW_SET_BADGE, unread)
     } catch (err: unknown) {
       console.error(`[SyncEngine] account ${accountId} failed:`, err)
-      worker.status = { state: 'error', lastError: String(err) }
+      const { message } = describeSyncError(err)
+      worker.status = { state: 'error', lastError: message }
       this.broadcastStatus(accountId, worker.status)
     } finally {
       worker.syncing = false
