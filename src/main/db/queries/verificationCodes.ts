@@ -43,6 +43,30 @@ const SELECT_COLS = `
   is_read       AS isRead
 `
 
+/**
+ * A code is a duplicate when the same message already produced one, or the
+ * same (account, code) pair was seen within 24h — re-syncs and multi-folder
+ * copies (e.g. Gmail All Mail) must not fill the Verification Center with
+ * repeats of one email.
+ */
+export function hasRecentDuplicate(
+  accountId: string,
+  code: string,
+  receivedAt: number,
+  messageId: string
+): boolean {
+  const db = getRawSqlite()
+  const row = db
+    .prepare(
+      `SELECT id FROM verification_codes
+       WHERE message_id = ?
+          OR (account_id = ? AND code = ? AND received_at > ? AND received_at < ?)
+       LIMIT 1`
+    )
+    .get(messageId, accountId, code, receivedAt - 86_400_000, receivedAt + 86_400_000)
+  return row !== undefined
+}
+
 export function insertVerificationCode(data: InsertVerificationCodeData): VerificationCodeRow {
   const db = getRawSqlite()
   const id = ulid()

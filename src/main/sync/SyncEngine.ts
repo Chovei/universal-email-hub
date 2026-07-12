@@ -31,8 +31,8 @@ import { getFolderByRemoteId, upsertFolder, updateFolderSyncCursor } from '../db
 import { getAccountById, updateAccount } from '../db/queries/accounts'
 import { IPC } from '@shared/constants/ipc-channels'
 import { monotonicFactory } from 'ulid'
-import { isVerificationEmail, extractCode, detectServiceName } from './VerificationExtractor'
-import { insertVerificationCode } from '../db/queries/verificationCodes'
+import { isVerificationEmail, extractVerification, detectServiceName } from './VerificationExtractor'
+import { insertVerificationCode, hasRecentDuplicate } from '../db/queries/verificationCodes'
 
 const ulid = monotonicFactory()
 
@@ -512,8 +512,8 @@ export class SyncEngine {
           const subject = msgRow.subject ?? ''
           const bodyText = msgRow.bodyText ?? ''
           if (isVerificationEmail(subject, bodyText)) {
-            const code = extractCode(subject, bodyText)
-            if (code) {
+            const extracted = extractVerification(subject, bodyText)
+            if (extracted && !hasRecentDuplicate(accountId, extracted.code, msgRow.date, msgRow.id)) {
               try {
                 const vcRow = insertVerificationCode({
                   accountId,
@@ -521,7 +521,7 @@ export class SyncEngine {
                   serviceName: detectServiceName(msgRow.fromAddress, msgRow.fromName),
                   senderEmail: msgRow.fromAddress,
                   senderName: msgRow.fromName,
-                  code,
+                  code: extracted.code,
                   subject,
                   receivedAt: msgRow.date,
                 })
