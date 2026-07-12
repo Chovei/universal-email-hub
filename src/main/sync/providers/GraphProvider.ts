@@ -475,10 +475,17 @@ export class GraphProvider extends BaseProvider {
 
   async sendMessage(draft: Draft): Promise<{ remoteId: string }> {
     const { accessToken } = await this.validTokens()
-    await graphPost('/me/sendMail', accessToken, {
-      message: buildGraphMessage(draft), saveToSentItems: true,
-    })
-    return { remoteId: `sent-${Date.now()}` }
+    // /me/sendMail returns 202 with no body, which would leave us without the
+    // message's real ID. Create-then-send returns the actual Graph ID so
+    // replies, threading, and later lookups reference a real message.
+    const created = (await graphPost('/me/messages', accessToken, buildGraphMessage(draft))) as {
+      id?: string
+    }
+    if (!created?.id) {
+      throw new Error('Graph draft creation did not return a message ID')
+    }
+    await graphPost(`/me/messages/${created.id}/send`, accessToken, {})
+    return { remoteId: created.id }
   }
 
   async createDraft(draft: Draft): Promise<{ remoteId: string }> {
