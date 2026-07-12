@@ -69,7 +69,7 @@ export class ImapProvider extends BaseProvider {
     const creds = this._credentials
     // App passwords (Gmail, Outlook) are displayed with spaces; strip them before auth
     const password = creds.password.replace(/\s/g, '')
-    return new ImapFlow({
+    const client = new ImapFlow({
       host: creds.host,
       port: creds.port,
       secure: creds.security === 'TLS',
@@ -80,6 +80,13 @@ export class ImapProvider extends BaseProvider {
       // silently drop connections that idle too long
       maxIdleTime: 10 * 60 * 1000,
     })
+    // ImapFlow is an EventEmitter: a socket error with no 'error' listener
+    // becomes an unhandled exception that bypasses the operation's own error
+    // handling. In-flight commands still reject through their promises.
+    client.on('error', (err: Error) => {
+      console.warn(`[ImapProvider:${this.accountId}] connection error:`, err.message)
+    })
+    return client
   }
 
   /** A fresh connection for long-lived use (IDLE watching). Caller owns lifecycle. */
