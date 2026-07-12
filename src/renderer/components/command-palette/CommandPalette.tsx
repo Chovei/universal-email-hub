@@ -3,13 +3,13 @@ import { Command } from 'cmdk'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Search, Inbox, Send, FileText, Trash2, Settings, Plus,
-  Star, Archive, RefreshCw, Mail, Layers,
+  Star, Archive, RefreshCw, Mail, Layers, Keyboard,
 } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'
 import { useMailboxStore } from '../../stores/mailboxStore'
 import { useAccountStore } from '../../stores/accountStore'
 
-export function CommandPalette() {
+export function CommandPalette({ onShowShortcuts }: { onShowShortcuts?: () => void }) {
   const { commandPaletteOpen, closeCommandPalette, openComposer, setActivePanel } = useUIStore()
   const { setFolderType } = useMailboxStore()
   const { accounts, setActiveAccount } = useAccountStore()
@@ -90,6 +90,14 @@ export function CommandPalette() {
                       label="Sync all accounts"
                       onSelect={() => runAndClose(() => void window.emailAPI.sync.force())}
                     />
+                    {onShowShortcuts && (
+                      <CommandItem
+                        icon={<Keyboard className="w-4 h-4" />}
+                        label="Keyboard shortcuts"
+                        shortcut="Ctrl /"
+                        onSelect={() => runAndClose(onShowShortcuts)}
+                      />
+                    )}
                   </CommandGroup>
 
                   {/* Navigate */}

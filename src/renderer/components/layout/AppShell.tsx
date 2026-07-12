@@ -19,6 +19,7 @@ import { useBulkOperation } from '../../hooks/useBulkOperation'
 import { useSelectionStore } from '../../stores/selectionStore'
 import { useFolderActions } from '../../hooks/useFolderActions'
 import { FolderConfirmDialog } from '../folder/FolderConfirmDialog'
+import { ShortcutsModal } from '../shortcuts/ShortcutsModal'
 import type { BulkAction, FolderAction } from '@shared/types/ipc'
 import type { FolderRow } from '@shared/types/db'
 
@@ -27,6 +28,7 @@ export function AppShell() {
   const { openComposer } = useComposeStore()
   const { accounts } = useAccountStore()
   const [showAddAccount, setShowAddAccount] = useState(false)
+  const [showShortcuts, setShowShortcuts] = useState(false)
 
   const { deselectAll } = useSelectionStore()
   const { execute, cancel, undo, dismiss, progress, result, isRunning, lastAction } = useBulkOperation()
@@ -62,6 +64,9 @@ export function AppShell() {
   // Jump to the Verification Center from anywhere
   useHotkeys('ctrl+shift+v, meta+shift+v', () => setActivePanel('verification'), [setActivePanel])
 
+  // Shortcut discoverability: Ctrl+/ shows the overview
+  useHotkeys('ctrl+slash, meta+slash', () => setShowShortcuts((v) => !v), [])
+
   // Show add-account wizard automatically when there are no accounts
   useEffect(() => {
     if (accounts.length === 0) {
@@ -85,8 +90,13 @@ export function AppShell() {
       </main>
 
       {/* Global overlays */}
-      <CommandPalette />
+      <CommandPalette onShowShortcuts={() => setShowShortcuts(true)} />
       <ComposerManager />
+
+      {/* Keyboard shortcuts overview */}
+      <AnimatePresence>
+        {showShortcuts && <ShortcutsModal onClose={() => setShowShortcuts(false)} />}
+      </AnimatePresence>
 
       {/* Add account wizard */}
       <AnimatePresence>
