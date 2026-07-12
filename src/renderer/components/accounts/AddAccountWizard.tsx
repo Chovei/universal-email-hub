@@ -4,6 +4,7 @@ import { X, ChevronRight, Loader2, CheckCircle2, XCircle, ExternalLink, ArrowLef
 import { cn } from '../../lib/utils'
 import type { ProviderKind } from '@shared/constants/providers'
 import type { VerifyAccountPayload, VerifyAccountResult, AddAccountPayload } from '@shared/types/ipc'
+import { humanizeWizardError } from './wizardErrors'
 import type { AccountRow } from '@shared/types/db'
 
 // ── Provider definitions ───────────────────────────────────────────────────────
@@ -435,6 +436,7 @@ function ConnectingStep({
 }) {
   const [phase, setPhase] = useState<ConnectPhase>('verifying')
   const [errorMsg, setErrorMsg] = useState('')
+  const [errorHint, setErrorHint] = useState('')
   const [errorDetail, setErrorDetail] = useState('')
   const [errorStep, setErrorStep] = useState(0)
   const [syncedCount, setSyncedCount] = useState(0)
@@ -466,8 +468,12 @@ function ConnectingStep({
       if (cancelled) return
 
       if (!vRes.data?.success) {
-        setErrorMsg(vRes.data?.error ?? vRes.error?.message ?? 'Connection failed')
-        setErrorDetail(vRes.data?.detail ?? '')
+        const raw = vRes.data?.error ?? vRes.error?.message ?? 'Connection failed'
+        const human = humanizeWizardError(provider.id, raw)
+        setErrorMsg(human.title)
+        setErrorHint(human.hint)
+        // Raw server response stays available behind the technical-details line
+        setErrorDetail([raw, vRes.data?.detail].filter(Boolean).join(' — '))
         setErrorStep(0)
         setPhase('error')
         return
@@ -562,9 +568,15 @@ function ConnectingStep({
 
       {isError && (
         <div className="bg-red-500/8 border border-red-500/20 rounded-xl px-4 py-3 text-sm text-red-600 dark:text-red-400 flex flex-col gap-1.5">
-          <span>{errorMsg}</span>
+          <span className="font-medium">{errorMsg}</span>
+          {errorHint && (
+            <span className="text-xs text-[var(--color-foreground)] opacity-80">{errorHint}</span>
+          )}
           {errorDetail && (
-            <span className="text-xs opacity-60 font-mono break-all">{errorDetail}</span>
+            <details className="text-xs opacity-60">
+              <summary className="cursor-pointer select-none">Technical details</summary>
+              <span className="font-mono break-all">{errorDetail}</span>
+            </details>
           )}
         </div>
       )}
