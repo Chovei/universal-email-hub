@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Sun, Moon, Monitor, Palette, Bell, User, Key, Info, Eye, EyeOff, Trash2, RefreshCw, Download, CheckCircle2, Loader2 } from 'lucide-react'
+import { Sun, Moon, Monitor, Palette, Bell, User, Key, Info, Eye, EyeOff, Trash2, RefreshCw, Download, CheckCircle2, Loader2, Activity } from 'lucide-react'
+import { AccountHealthList } from './AccountHealth'
 import { cn } from '../../lib/utils'
 import { useUIStore } from '../../stores/uiStore'
 import { useAccounts } from '../../hooks/useAccounts'
@@ -40,6 +41,11 @@ export function SettingsPage() {
         <h1 className="text-2xl font-bold text-[var(--color-foreground)] mb-8">Settings</h1>
 
         <div className="space-y-8">
+          {/* Account health */}
+          <Section title="Account Health" icon={<Activity className="w-4 h-4" />}>
+            <AccountHealthList />
+          </Section>
+
           {/* Appearance */}
           <Section title="Appearance" icon={<Palette className="w-4 h-4" />}>
             <div className="space-y-4">

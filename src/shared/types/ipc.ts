@@ -11,6 +11,7 @@ import type {
   SearchResult,
   AppSettings,
   VerificationCodeRow,
+  AccountHealth,
 } from './db'
 
 // ── Generic IPC envelope ───────────────────────────────────────────────────
@@ -324,6 +325,8 @@ export interface EmailAPI {
     oauthStart(provider: 'gmail' | 'graph'): Promise<AccountRow>
     /** Test IMAP connection without saving to DB */
     verify(payload: VerifyAccountPayload): Promise<VerifyAccountResult>
+    /** Per-account health: sync status, counts, provider */
+    health(): Promise<AccountHealth[]>
     onSyncStatusChanged(cb: (payload: SyncStatusChangedPayload) => void): () => void
   }
 

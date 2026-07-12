@@ -8,6 +8,7 @@ export const IPC = {
   ACCOUNTS_RECONNECT: 'accounts:reconnect',
   ACCOUNTS_OAUTH_START: 'accounts:oauthStart',
   ACCOUNTS_VERIFY: 'accounts:verify',
+  ACCOUNTS_HEALTH: 'accounts:health',
   /** push: main → renderer */
   ACCOUNTS_SYNC_STATUS_CHANGED: 'accounts:syncStatusChanged',
 

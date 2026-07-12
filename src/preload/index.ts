@@ -22,6 +22,7 @@ const emailAPI: EmailAPI = {
     reorder: (accountIds) => invoke(IPC.ACCOUNTS_REORDER, accountIds),
     oauthStart: (provider) => invoke(IPC.ACCOUNTS_OAUTH_START, provider),
     verify: (payload) => invoke(IPC.ACCOUNTS_VERIFY, payload),
+    health: () => invoke(IPC.ACCOUNTS_HEALTH),
     onSyncStatusChanged: (cb) => on(IPC.ACCOUNTS_SYNC_STATUS_CHANGED, cb as (...args: unknown[]) => void),
   },
 

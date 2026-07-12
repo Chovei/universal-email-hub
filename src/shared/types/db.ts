@@ -164,6 +164,18 @@ export interface SyncStatus {
   realtime?: boolean
 }
 
+// ── Account health ─────────────────────────────────────────────────────────
+
+export interface AccountHealth {
+  accountId: string
+  email: string
+  displayName: string
+  provider: string
+  status: SyncStatus
+  messageCount: number
+  unreadCount: number
+}
+
 // ── Search ─────────────────────────────────────────────────────────────────
 
 export interface SearchResult {
