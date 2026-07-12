@@ -15,6 +15,7 @@ import type {
   Draft,
   PushConfig,
   FolderType,
+  RemoteMessageRef,
 } from '@shared/types/provider'
 import type { ProviderKind } from '@shared/constants/providers'
 
@@ -496,41 +497,41 @@ export class GraphProvider extends BaseProvider {
     await graphDelete(`/me/messages/${remoteId}`, accessToken)
   }
 
-  async markRead(remoteIds: string[], read: boolean): Promise<void> {
+  async markRead(refs: RemoteMessageRef[], read: boolean): Promise<void> {
     const { accessToken } = await this.validTokens()
     await Promise.all(
-      remoteIds.map((id) => graphPatch(`/me/messages/${id}`, accessToken, { isRead: read }).catch(() => {}))
+      refs.map(({ remoteId: id }) => graphPatch(`/me/messages/${id}`, accessToken, { isRead: read }).catch(() => {}))
     )
   }
 
-  async star(remoteIds: string[], starred: boolean): Promise<void> {
+  async star(refs: RemoteMessageRef[], starred: boolean): Promise<void> {
     const { accessToken } = await this.validTokens()
     const flagStatus = starred ? 'flagged' : 'notFlagged'
     await Promise.all(
-      remoteIds.map((id) =>
+      refs.map(({ remoteId: id }) =>
         graphPatch(`/me/messages/${id}`, accessToken, { flag: { flagStatus } }).catch(() => {})
       )
     )
   }
 
-  async moveMessages(remoteIds: string[], targetFolderRemoteId: string): Promise<void> {
+  async moveMessages(refs: RemoteMessageRef[], targetFolderRemoteId: string): Promise<void> {
     const { accessToken } = await this.validTokens()
     await Promise.all(
-      remoteIds.map((id) =>
+      refs.map(({ remoteId: id }) =>
         graphPost(`/me/messages/${id}/move`, accessToken, { destinationId: targetFolderRemoteId }).catch(() => {})
       )
     )
   }
 
-  async deleteMessages(remoteIds: string[]): Promise<void> {
+  async deleteMessages(refs: RemoteMessageRef[]): Promise<void> {
     const { accessToken } = await this.validTokens()
-    await Promise.all(remoteIds.map((id) => graphDelete(`/me/messages/${id}`, accessToken).catch(() => {})))
+    await Promise.all(refs.map(({ remoteId: id }) => graphDelete(`/me/messages/${id}`, accessToken).catch(() => {})))
   }
 
-  async addLabels(remoteIds: string[], labels: string[]): Promise<void> {
+  async addLabels(refs: RemoteMessageRef[], labels: string[]): Promise<void> {
     const { accessToken } = await this.validTokens()
     await Promise.all(
-      remoteIds.map(async (id) => {
+      refs.map(async ({ remoteId: id }) => {
         const msg = await graphGet(`/me/messages/${id}?$select=categories`, accessToken) as { categories?: string[] }
         await graphPatch(`/me/messages/${id}`, accessToken, {
           categories: [...new Set([...(msg.categories ?? []), ...labels])],
@@ -539,10 +540,10 @@ export class GraphProvider extends BaseProvider {
     )
   }
 
-  async removeLabels(remoteIds: string[], labels: string[]): Promise<void> {
+  async removeLabels(refs: RemoteMessageRef[], labels: string[]): Promise<void> {
     const { accessToken } = await this.validTokens()
     await Promise.all(
-      remoteIds.map(async (id) => {
+      refs.map(async ({ remoteId: id }) => {
         const msg = await graphGet(`/me/messages/${id}?$select=categories`, accessToken) as { categories?: string[] }
         await graphPatch(`/me/messages/${id}`, accessToken, {
           categories: (msg.categories ?? []).filter((c) => !labels.includes(c)),

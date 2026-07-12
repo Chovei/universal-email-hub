@@ -23,8 +23,10 @@ import {
 import { listThreads, getThreadById } from '../../db/queries/threads'
 import { getFolderByType } from '../../db/queries/folders'
 import { SyncEngine } from '../../sync/SyncEngine'
+import { buildRemoteRefs } from '../../sync/remoteRefs'
 import type { GetThreadResult, ListMessagesResult } from '@shared/types/ipc'
 import type { ThreadRow, MessageRow, AttachmentRow } from '@shared/types/db'
+import type { RemoteMessageRef } from '@shared/types/provider'
 
 function toThreadRow(t: ReturnType<typeof listThreads>[0]): ThreadRow {
   return {
@@ -88,19 +90,19 @@ function toAttachmentRow(a: ReturnType<typeof getAttachmentsByMessage>[0]): Atta
 
 function propagateToProvider(
   messageIds: string[],
-  action: (engine: SyncEngine, accountId: string, remoteIds: string[]) => void
+  action: (engine: SyncEngine, accountId: string, refs: RemoteMessageRef[]) => void
 ): void {
   const engine = SyncEngine.getInstance()
-  const byAccount = new Map<string, string[]>()
+  const byAccount = new Map<string, Array<{ remoteId: string; folderId: string | null }>>()
   for (const id of messageIds) {
     const msg = getMessageById(id)
     if (!msg) continue
     const existing = byAccount.get(msg.accountId) ?? []
-    existing.push(msg.remoteId)
+    existing.push({ remoteId: msg.remoteId, folderId: msg.folderId ?? null })
     byAccount.set(msg.accountId, existing)
   }
-  for (const [accountId, remoteIds] of byAccount) {
-    action(engine, accountId, remoteIds)
+  for (const [accountId, msgs] of byAccount) {
+    action(engine, accountId, buildRemoteRefs(msgs))
   }
 }
 
@@ -191,18 +193,16 @@ export function registerMessageHandlers(): void {
   ipcMain.handle(IPC.MESSAGES_MOVE, async (_event, payload: unknown) => {
     try {
       const { messageIds, targetFolderId } = MoveSchema.parse(payload)
-      moveMessages(messageIds, targetFolderId)
-      // Server-side move: resolve target folder's remoteId then propagate
-      const firstMsg = messageIds.map((id) => getMessageById(id)).find(Boolean)
-      if (firstMsg) {
-        const { getFolderById } = await import('../../db/queries/folders')
-        const targetFolder = getFolderById(targetFolderId)
-        if (targetFolder) {
-          propagateToProvider(messageIds, (engine, accountId, remoteIds) =>
-            void engine.moveMessages(accountId, remoteIds, targetFolder.remoteId)
-          )
-        }
+      // Propagate BEFORE the local move — refs must carry the folder the
+      // messages currently occupy on the server, not the target folder
+      const { getFolderById } = await import('../../db/queries/folders')
+      const targetFolder = getFolderById(targetFolderId)
+      if (targetFolder) {
+        propagateToProvider(messageIds, (engine, accountId, refs) =>
+          void engine.moveMessages(accountId, refs, targetFolder.remoteId)
+        )
       }
+      moveMessages(messageIds, targetFolderId)
       return { data: null }
     } catch (err) {
       return { error: { code: 'MOVE_ERROR', message: String(err) } }
@@ -247,20 +247,26 @@ export function registerMessageHandlers(): void {
     try {
       const messageIds = ArchiveSchema.parse(payload)
       const engine = SyncEngine.getInstance()
-      const byAccount = new Map<string, { localIds: string[]; remoteIds: string[] }>()
+      const byAccount = new Map<
+        string,
+        { localIds: string[]; msgs: Array<{ remoteId: string; folderId: string | null }> }
+      >()
       for (const id of messageIds) {
         const msg = getMessageById(id)
         if (!msg) continue
-        const entry = byAccount.get(msg.accountId) ?? { localIds: [], remoteIds: [] }
+        const entry = byAccount.get(msg.accountId) ?? { localIds: [], msgs: [] }
         entry.localIds.push(msg.id)
-        entry.remoteIds.push(msg.remoteId)
+        entry.msgs.push({ remoteId: msg.remoteId, folderId: msg.folderId ?? null })
         byAccount.set(msg.accountId, entry)
       }
-      for (const [accountId, { localIds, remoteIds }] of byAccount) {
+      for (const [accountId, { localIds, msgs }] of byAccount) {
         const archiveFolder = getFolderByType(accountId, 'archive')
         if (archiveFolder) {
+          // Build refs BEFORE the local move — refs must carry the folder the
+          // messages are currently in on the server, not the target folder
+          const refs = buildRemoteRefs(msgs)
           moveMessages(localIds, archiveFolder.id)
-          void engine.moveMessages(accountId, remoteIds, archiveFolder.remoteId)
+          void engine.moveMessages(accountId, refs, archiveFolder.remoteId)
         }
       }
       return { data: null }

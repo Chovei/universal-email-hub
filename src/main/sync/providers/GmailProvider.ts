@@ -17,6 +17,7 @@ import type {
   Draft,
   PushConfig,
   FolderType,
+  RemoteMessageRef,
 } from '@shared/types/provider'
 import type { ProviderKind } from '@shared/constants/providers'
 
@@ -657,11 +658,11 @@ export class GmailProvider extends BaseProvider {
     await gmail.users.drafts.delete({ userId: 'me', id: remoteId })
   }
 
-  async markRead(remoteIds: string[], read: boolean): Promise<void> {
+  async markRead(refs: RemoteMessageRef[], read: boolean): Promise<void> {
     const client = await this.getClient()
     const gmail = google.gmail({ version: 'v1', auth: client })
     await Promise.all(
-      remoteIds.map((id) =>
+      refs.map(({ remoteId: id }) =>
         gmail.users.messages.modify({
           userId: 'me',
           id,
@@ -674,11 +675,11 @@ export class GmailProvider extends BaseProvider {
     )
   }
 
-  async star(remoteIds: string[], starred: boolean): Promise<void> {
+  async star(refs: RemoteMessageRef[], starred: boolean): Promise<void> {
     const client = await this.getClient()
     const gmail = google.gmail({ version: 'v1', auth: client })
     await Promise.all(
-      remoteIds.map((id) =>
+      refs.map(({ remoteId: id }) =>
         gmail.users.messages.modify({
           userId: 'me',
           id,
@@ -691,11 +692,11 @@ export class GmailProvider extends BaseProvider {
     )
   }
 
-  async moveMessages(remoteIds: string[], targetFolderRemoteId: string): Promise<void> {
+  async moveMessages(refs: RemoteMessageRef[], targetFolderRemoteId: string): Promise<void> {
     const client = await this.getClient()
     const gmail = google.gmail({ version: 'v1', auth: client })
     await Promise.all(
-      remoteIds.map((id) =>
+      refs.map(({ remoteId: id }) =>
         gmail.users.messages.modify({
           userId: 'me',
           id,
@@ -708,27 +709,27 @@ export class GmailProvider extends BaseProvider {
     )
   }
 
-  async deleteMessages(remoteIds: string[]): Promise<void> {
+  async deleteMessages(refs: RemoteMessageRef[]): Promise<void> {
     const client = await this.getClient()
     const gmail = google.gmail({ version: 'v1', auth: client })
-    await Promise.all(remoteIds.map((id) => gmail.users.messages.trash({ userId: 'me', id })))
+    await Promise.all(refs.map(({ remoteId: id }) => gmail.users.messages.trash({ userId: 'me', id })))
   }
 
-  async addLabels(remoteIds: string[], labels: string[]): Promise<void> {
+  async addLabels(refs: RemoteMessageRef[], labels: string[]): Promise<void> {
     const client = await this.getClient()
     const gmail = google.gmail({ version: 'v1', auth: client })
     await Promise.all(
-      remoteIds.map((id) =>
+      refs.map(({ remoteId: id }) =>
         gmail.users.messages.modify({ userId: 'me', id, requestBody: { addLabelIds: labels } })
       )
     )
   }
 
-  async removeLabels(remoteIds: string[], labels: string[]): Promise<void> {
+  async removeLabels(refs: RemoteMessageRef[], labels: string[]): Promise<void> {
     const client = await this.getClient()
     const gmail = google.gmail({ version: 'v1', auth: client })
     await Promise.all(
-      remoteIds.map((id) =>
+      refs.map(({ remoteId: id }) =>
         gmail.users.messages.modify({ userId: 'me', id, requestBody: { removeLabelIds: labels } })
       )
     )

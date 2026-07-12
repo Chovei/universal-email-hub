@@ -1,4 +1,4 @@
-import type { IEmailProvider, OAuthTokens, BasicCredentials, ProviderFolder, SyncResult, RawMessage, Draft, PushConfig } from '@shared/types/provider'
+import type { IEmailProvider, OAuthTokens, BasicCredentials, ProviderFolder, SyncResult, RawMessage, Draft, PushConfig, RemoteMessageRef } from '@shared/types/provider'
 import type { ProviderKind } from '@shared/constants/providers'
 
 export abstract class BaseProvider implements IEmailProvider {
@@ -12,18 +12,18 @@ export abstract class BaseProvider implements IEmailProvider {
   abstract listFolders(): Promise<ProviderFolder[]>
   abstract getFolder(remoteId: string): Promise<ProviderFolder>
   abstract syncFolder(folderId: string, cursor: string | null): Promise<SyncResult>
-  abstract fetchMessage(remoteId: string): Promise<RawMessage>
-  abstract fetchAttachment(remoteRef: string): Promise<Buffer>
+  abstract fetchMessage(remoteId: string, folderRemoteId?: string | null): Promise<RawMessage>
+  abstract fetchAttachment(remoteRef: string, folderRemoteId?: string | null): Promise<Buffer>
   abstract sendMessage(draft: Draft): Promise<{ remoteId: string }>
   abstract createDraft(draft: Draft): Promise<{ remoteId: string }>
   abstract updateDraft(remoteId: string, draft: Draft): Promise<void>
   abstract deleteDraft(remoteId: string): Promise<void>
-  abstract markRead(remoteIds: string[], read: boolean): Promise<void>
-  abstract star(remoteIds: string[], starred: boolean): Promise<void>
-  abstract moveMessages(remoteIds: string[], targetFolderRemoteId: string): Promise<void>
-  abstract deleteMessages(remoteIds: string[]): Promise<void>
-  abstract addLabels(remoteIds: string[], labels: string[]): Promise<void>
-  abstract removeLabels(remoteIds: string[], labels: string[]): Promise<void>
+  abstract markRead(refs: RemoteMessageRef[], read: boolean): Promise<void>
+  abstract star(refs: RemoteMessageRef[], starred: boolean): Promise<void>
+  abstract moveMessages(refs: RemoteMessageRef[], targetFolderRemoteId: string): Promise<void>
+  abstract deleteMessages(refs: RemoteMessageRef[]): Promise<void>
+  abstract addLabels(refs: RemoteMessageRef[], labels: string[]): Promise<void>
+  abstract removeLabels(refs: RemoteMessageRef[], labels: string[]): Promise<void>
   abstract searchRemote(query: string, folderId?: string): Promise<RawMessage[]>
   abstract setupPush(webhookUrl?: string): Promise<PushConfig>
   abstract teardownPush(): Promise<void>

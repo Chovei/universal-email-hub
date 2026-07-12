@@ -8,7 +8,13 @@ import {
   getMessageById,
   updateAttachmentDownloaded,
 } from '../../db/queries/messages'
+import { getFolderById } from '../../db/queries/folders'
 import { SyncEngine } from '../../sync/SyncEngine'
+
+/** IMAP needs the mailbox the message lives in to fetch its attachments. */
+function folderRemoteIdOf(message: { folderId: string | null }): string | null {
+  return message.folderId ? (getFolderById(message.folderId)?.remoteId ?? null) : null
+}
 
 export function registerShellHandlers(): void {
   ipcMain.handle(IPC.SHELL_OPEN_EXTERNAL, async (_event, url: string) => {
@@ -65,7 +71,8 @@ export function registerShellHandlers(): void {
 
       const buffer = await SyncEngine.getInstance().downloadAttachment(
         message.accountId,
-        attachment.remoteRef
+        attachment.remoteRef,
+        folderRemoteIdOf(message)
       )
 
       const localPath = path.join(downloadDir, `${attachment.id}_${attachment.filename}`)
@@ -100,7 +107,8 @@ export function registerShellHandlers(): void {
 
         const buffer = await SyncEngine.getInstance().downloadAttachment(
           message.accountId,
-          attachment.remoteRef
+          attachment.remoteRef,
+          folderRemoteIdOf(message)
         )
         fs.writeFileSync(filePath, buffer)
       }

@@ -1,7 +1,7 @@
 import type { BrowserWindow } from 'electron'
 import type { ProviderKind } from '@shared/constants/providers'
 import type { SyncStatus, ThreadRow, ParticipantAddress } from '@shared/types/db'
-import type { BasicCredentials, RawMessage, ProviderFolder } from '@shared/types/provider'
+import type { BasicCredentials, RawMessage, ProviderFolder, RemoteMessageRef } from '@shared/types/provider'
 import type { ThreadSelect, FolderSelect, MessageInsert, ThreadInsert } from '../db/schema'
 import { GmailProvider } from './providers/GmailProvider'
 import { GraphProvider } from './providers/GraphProvider'
@@ -260,36 +260,44 @@ export class SyncEngine {
     await this.requireWorker(accountId).provider.deleteDraft(remoteId)
   }
 
-  async downloadAttachment(accountId: string, remoteRef: string): Promise<Buffer> {
-    return this.requireWorker(accountId).provider.fetchAttachment(remoteRef)
+  async downloadAttachment(
+    accountId: string,
+    remoteRef: string,
+    folderRemoteId?: string | null
+  ): Promise<Buffer> {
+    return this.requireWorker(accountId).provider.fetchAttachment(remoteRef, folderRemoteId)
   }
 
-  async markMessagesRead(accountId: string, remoteIds: string[], read: boolean): Promise<void> {
+  async markMessagesRead(accountId: string, refs: RemoteMessageRef[], read: boolean): Promise<void> {
     const w = this.workers.get(accountId)
-    if (!w || remoteIds.length === 0) return
-    await w.provider.markRead(remoteIds, read).catch(() => {})
+    if (!w || refs.length === 0) return
+    await w.provider.markRead(refs, read).catch((err: unknown) => {
+      console.warn(`[SyncEngine] markRead propagation failed for ${accountId}:`, err)
+    })
   }
 
-  async starMessages(accountId: string, remoteIds: string[], starred: boolean): Promise<void> {
+  async starMessages(accountId: string, refs: RemoteMessageRef[], starred: boolean): Promise<void> {
     const w = this.workers.get(accountId)
-    if (!w || remoteIds.length === 0) return
-    await w.provider.star(remoteIds, starred).catch(() => {})
+    if (!w || refs.length === 0) return
+    await w.provider.star(refs, starred).catch((err: unknown) => {
+      console.warn(`[SyncEngine] star propagation failed for ${accountId}:`, err)
+    })
   }
 
-  async moveMessages(accountId: string, remoteIds: string[], targetFolderRemoteId: string): Promise<void> {
+  async moveMessages(accountId: string, refs: RemoteMessageRef[], targetFolderRemoteId: string): Promise<void> {
     const w = this.workers.get(accountId)
-    if (!w) return
-    if (remoteIds.length > 0) {
-      await w.provider.moveMessages(remoteIds, targetFolderRemoteId).catch(() => {})
-    }
+    if (!w || refs.length === 0) return
+    await w.provider.moveMessages(refs, targetFolderRemoteId).catch((err: unknown) => {
+      console.warn(`[SyncEngine] move propagation failed for ${accountId}:`, err)
+    })
   }
 
-  async deleteRemoteMessages(accountId: string, remoteIds: string[]): Promise<void> {
+  async deleteRemoteMessages(accountId: string, refs: RemoteMessageRef[]): Promise<void> {
     const w = this.workers.get(accountId)
-    if (!w) return
-    if (remoteIds.length > 0) {
-      await w.provider.deleteMessages(remoteIds).catch(() => {})
-    }
+    if (!w || refs.length === 0) return
+    await w.provider.deleteMessages(refs).catch((err: unknown) => {
+      console.warn(`[SyncEngine] delete propagation failed for ${accountId}:`, err)
+    })
   }
 
   shutdown(): void {

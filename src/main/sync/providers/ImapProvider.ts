@@ -15,6 +15,7 @@ import type {
   Draft,
   PushConfig,
   FolderType,
+  RemoteMessageRef,
 } from '@shared/types/provider'
 import type { ProviderKind } from '@shared/constants/providers'
 
@@ -123,6 +124,62 @@ export class ImapProvider extends BaseProvider {
       auth: { user: creds.username, pass: creds.password },
       tls: { rejectUnauthorized: true },
     })
+  }
+
+  // ── Folder-scoped mutation plumbing ────────────────────────────────────
+  // IMAP UIDs are only unique within a mailbox. Refs missing folder context
+  // are skipped (and logged) rather than guessed: operating on a UID in the
+  // wrong mailbox can silently mutate an unrelated message.
+
+  private groupRefsByFolder(refs: RemoteMessageRef[]): Map<string, string[]> {
+    const byFolder = new Map<string, string[]>()
+    let skipped = 0
+    for (const ref of refs) {
+      if (!ref.folderRemoteId) {
+        skipped++
+        continue
+      }
+      const list = byFolder.get(ref.folderRemoteId) ?? []
+      list.push(ref.remoteId)
+      byFolder.set(ref.folderRemoteId, list)
+    }
+    if (skipped > 0) {
+      console.warn(
+        `[ImapProvider:${this.accountId}] Skipped ${skipped} message ref(s) without folder context — remote state will reconcile on next sync`
+      )
+    }
+    return byFolder
+  }
+
+  /** Open one connection, run `op` once per folder group with the mailbox locked. */
+  private async withFolderGroups(
+    refs: RemoteMessageRef[],
+    op: (client: ImapFlow, uidSet: string) => Promise<void>
+  ): Promise<void> {
+    const byFolder = this.groupRefsByFolder(refs)
+    if (byFolder.size === 0) return
+
+    const client = this.makeClient()
+    const failures: string[] = []
+    try {
+      await client.connect()
+      for (const [folderPath, uids] of byFolder) {
+        const lock = await client.getMailboxLock(folderPath)
+        try {
+          await op(client, uids.join(','))
+        } catch (err) {
+          failures.push(`${folderPath}: ${err instanceof Error ? err.message : String(err)}`)
+        } finally {
+          lock.release()
+        }
+      }
+    } finally {
+      await client.logout().catch(() => {})
+    }
+
+    if (failures.length > 0) {
+      throw new Error(`IMAP operation failed for ${failures.length} folder(s): ${failures.join('; ')}`)
+    }
   }
 
   // ── Auth (IMAP uses stored credentials, no OAuth dance) ────────────────
@@ -405,21 +462,22 @@ export class ImapProvider extends BaseProvider {
     }
   }
 
-  async fetchMessage(remoteId: string): Promise<RawMessage> {
+  async fetchMessage(remoteId: string, folderRemoteId?: string | null): Promise<RawMessage> {
+    const mailbox = folderRemoteId ?? 'INBOX'
     const client = this.makeClient()
     try {
       await client.connect()
-      const lock = await client.getMailboxLock('INBOX')
+      const lock = await client.getMailboxLock(mailbox)
       try {
         for await (const msg of client.fetch(
           { uid: remoteId },
           { envelope: true, source: true, flags: true, uid: true },
           { uid: true }
         )) {
-          const parsed = await this.parseFetchMessage(msg, 'INBOX')
+          const parsed = await this.parseFetchMessage(msg, mailbox)
           if (parsed) return parsed
         }
-        throw new Error(`Message ${remoteId} not found`)
+        throw new Error(`Message ${remoteId} not found in ${mailbox}`)
       } finally {
         lock.release()
       }
@@ -428,14 +486,20 @@ export class ImapProvider extends BaseProvider {
     }
   }
 
-  async fetchAttachment(remoteRef: string): Promise<Buffer> {
-    // IMAP attachments are fetched by re-downloading the full message
-    // and extracting the specific attachment by checksum/filename
-    const [uidStr] = remoteRef.split(':')
+  async fetchAttachment(remoteRef: string, folderRemoteId?: string | null): Promise<Buffer> {
+    // IMAP attachments are fetched by re-downloading the full message and
+    // extracting the requested part. remoteRef format: "{uid}:{key}" where
+    // key is the same checksum/filename used when the ref was generated
+    // during sync (see parseFetchMessage).
+    const sep = remoteRef.indexOf(':')
+    const uidStr = sep === -1 ? remoteRef : remoteRef.slice(0, sep)
+    const attKey = sep === -1 ? '' : remoteRef.slice(sep + 1)
+
+    const mailbox = folderRemoteId ?? 'INBOX'
     const client = this.makeClient()
     try {
       await client.connect()
-      const lock = await client.getMailboxLock('INBOX')
+      const lock = await client.getMailboxLock(mailbox)
       try {
         for await (const msg of client.fetch(
           { uid: uidStr },
@@ -444,11 +508,23 @@ export class ImapProvider extends BaseProvider {
         )) {
           if (!msg.source) continue
           const parsed = await simpleParser(msg.source)
-          // Find first attachment (simplistic — good enough for Phase 2)
-          const att = parsed.attachments?.[0]
-          if (att?.content) return att.content
+          const attachments = parsed.attachments ?? []
+
+          // Match by the same key formula used at sync time
+          const match = attachments.find(
+            (att) => (att.checksum ?? att.filename ?? 'att') === attKey
+          )
+          if (match?.content) return match.content
+
+          // Legacy refs (pre-fix) may not match; fall back to filename
+          const byName = attachments.find((att) => att.filename === attKey)
+          if (byName?.content) return byName.content
+
+          throw new Error(
+            `Attachment "${attKey}" not found in message ${uidStr} (${attachments.length} attachment(s) present)`
+          )
         }
-        throw new Error('Attachment not found')
+        throw new Error(`Message ${uidStr} not found in ${mailbox}`)
       } finally {
         lock.release()
       }
@@ -530,118 +606,54 @@ export class ImapProvider extends BaseProvider {
     }
   }
 
-  async markRead(remoteIds: string[], read: boolean): Promise<void> {
-    if (remoteIds.length === 0) return
-    const client = this.makeClient()
-    try {
-      await client.connect()
-      const lock = await client.getMailboxLock('INBOX')
-      try {
-        const uidSet = remoteIds.join(',')
-        if (read) {
-          await client.messageFlagsAdd({ uid: uidSet }, ['\\Seen'], { uid: true })
-        } else {
-          await client.messageFlagsRemove({ uid: uidSet }, ['\\Seen'], { uid: true })
-        }
-      } finally {
-        lock.release()
+  async markRead(refs: RemoteMessageRef[], read: boolean): Promise<void> {
+    if (refs.length === 0) return
+    await this.withFolderGroups(refs, async (client, uidSet) => {
+      if (read) {
+        await client.messageFlagsAdd({ uid: uidSet }, ['\\Seen'], { uid: true })
+      } else {
+        await client.messageFlagsRemove({ uid: uidSet }, ['\\Seen'], { uid: true })
       }
-    } finally {
-      await client.logout().catch(() => {})
-    }
+    })
   }
 
-  async star(remoteIds: string[], starred: boolean): Promise<void> {
-    if (remoteIds.length === 0) return
-    const client = this.makeClient()
-    try {
-      await client.connect()
-      const lock = await client.getMailboxLock('INBOX')
-      try {
-        const uidSet = remoteIds.join(',')
-        if (starred) {
-          await client.messageFlagsAdd({ uid: uidSet }, ['\\Flagged'], { uid: true })
-        } else {
-          await client.messageFlagsRemove({ uid: uidSet }, ['\\Flagged'], { uid: true })
-        }
-      } finally {
-        lock.release()
+  async star(refs: RemoteMessageRef[], starred: boolean): Promise<void> {
+    if (refs.length === 0) return
+    await this.withFolderGroups(refs, async (client, uidSet) => {
+      if (starred) {
+        await client.messageFlagsAdd({ uid: uidSet }, ['\\Flagged'], { uid: true })
+      } else {
+        await client.messageFlagsRemove({ uid: uidSet }, ['\\Flagged'], { uid: true })
       }
-    } finally {
-      await client.logout().catch(() => {})
-    }
+    })
   }
 
-  async moveMessages(remoteIds: string[], targetFolderRemoteId: string): Promise<void> {
-    if (remoteIds.length === 0) return
-    const client = this.makeClient()
-    try {
-      await client.connect()
-      const lock = await client.getMailboxLock('INBOX')
-      try {
-        await client.messageMove({ uid: remoteIds.join(',') }, targetFolderRemoteId, { uid: true })
-      } finally {
-        lock.release()
-      }
-    } finally {
-      await client.logout().catch(() => {})
-    }
+  async moveMessages(refs: RemoteMessageRef[], targetFolderRemoteId: string): Promise<void> {
+    if (refs.length === 0) return
+    await this.withFolderGroups(refs, async (client, uidSet) => {
+      await client.messageMove({ uid: uidSet }, targetFolderRemoteId, { uid: true })
+    })
   }
 
-  async deleteMessages(remoteIds: string[]): Promise<void> {
-    if (remoteIds.length === 0) return
-    const client = this.makeClient()
-    try {
-      await client.connect()
-      const lock = await client.getMailboxLock('INBOX')
-      try {
-        await client.messageDelete({ uid: remoteIds.join(',') }, { uid: true })
-      } finally {
-        lock.release()
-      }
-    } finally {
-      await client.logout().catch(() => {})
-    }
+  async deleteMessages(refs: RemoteMessageRef[]): Promise<void> {
+    if (refs.length === 0) return
+    await this.withFolderGroups(refs, async (client, uidSet) => {
+      await client.messageDelete({ uid: uidSet }, { uid: true })
+    })
   }
 
-  async addLabels(remoteIds: string[], labels: string[]): Promise<void> {
-    if (remoteIds.length === 0 || labels.length === 0) return
-    const client = this.makeClient()
-    try {
-      await client.connect()
-      const lock = await client.getMailboxLock('INBOX')
-      try {
-        await client.messageFlagsAdd(
-          { uid: remoteIds.join(',') },
-          labels.map((l) => `$${l}`),
-          { uid: true }
-        )
-      } finally {
-        lock.release()
-      }
-    } finally {
-      await client.logout().catch(() => {})
-    }
+  async addLabels(refs: RemoteMessageRef[], labels: string[]): Promise<void> {
+    if (refs.length === 0 || labels.length === 0) return
+    await this.withFolderGroups(refs, async (client, uidSet) => {
+      await client.messageFlagsAdd({ uid: uidSet }, labels.map((l) => `$${l}`), { uid: true })
+    })
   }
 
-  async removeLabels(remoteIds: string[], labels: string[]): Promise<void> {
-    if (remoteIds.length === 0 || labels.length === 0) return
-    const client = this.makeClient()
-    try {
-      await client.connect()
-      const lock = await client.getMailboxLock('INBOX')
-      try {
-        await client.messageFlagsRemove(
-          { uid: remoteIds.join(',') },
-          labels.map((l) => `$${l}`),
-          { uid: true }
-        )
-      } finally {
-        lock.release()
-      }
-    } finally {
-      await client.logout().catch(() => {})
-    }
+  async removeLabels(refs: RemoteMessageRef[], labels: string[]): Promise<void> {
+    if (refs.length === 0 || labels.length === 0) return
+    await this.withFolderGroups(refs, async (client, uidSet) => {
+      await client.messageFlagsRemove({ uid: uidSet }, labels.map((l) => `$${l}`), { uid: true })
+    })
   }
 
   async searchRemote(query: string, folderId = 'INBOX'): Promise<RawMessage[]> {

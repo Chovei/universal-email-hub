@@ -119,6 +119,16 @@ export interface PushConfig {
   subscriptionId?: string
 }
 
+// ── Remote message reference ────────────────────────────────────────────────
+// IMAP UIDs are only unique within a mailbox, so mutations must carry the
+// folder they belong to. Gmail/Graph IDs are global; those providers ignore
+// folderRemoteId.
+
+export interface RemoteMessageRef {
+  remoteId: string
+  folderRemoteId?: string | null
+}
+
 // ── Provider Interface ──────────────────────────────────────────────────────
 
 export interface IEmailProvider {
@@ -137,20 +147,20 @@ export interface IEmailProvider {
 
   // Sync — cursor null = full sync
   syncFolder(folderId: string, cursor: string | null): Promise<SyncResult>
-  fetchMessage(remoteId: string): Promise<RawMessage>
-  fetchAttachment(remoteRef: string): Promise<Buffer>
+  fetchMessage(remoteId: string, folderRemoteId?: string | null): Promise<RawMessage>
+  fetchAttachment(remoteRef: string, folderRemoteId?: string | null): Promise<Buffer>
 
-  // Mutations
+  // Mutations — refs carry folder context because IMAP UIDs are mailbox-scoped
   sendMessage(draft: Draft): Promise<{ remoteId: string }>
   createDraft(draft: Draft): Promise<{ remoteId: string }>
   updateDraft(remoteId: string, draft: Draft): Promise<void>
   deleteDraft(remoteId: string): Promise<void>
-  markRead(remoteIds: string[], read: boolean): Promise<void>
-  star(remoteIds: string[], starred: boolean): Promise<void>
-  moveMessages(remoteIds: string[], targetFolderRemoteId: string): Promise<void>
-  deleteMessages(remoteIds: string[]): Promise<void>
-  addLabels(remoteIds: string[], labels: string[]): Promise<void>
-  removeLabels(remoteIds: string[], labels: string[]): Promise<void>
+  markRead(refs: RemoteMessageRef[], read: boolean): Promise<void>
+  star(refs: RemoteMessageRef[], starred: boolean): Promise<void>
+  moveMessages(refs: RemoteMessageRef[], targetFolderRemoteId: string): Promise<void>
+  deleteMessages(refs: RemoteMessageRef[]): Promise<void>
+  addLabels(refs: RemoteMessageRef[], labels: string[]): Promise<void>
+  removeLabels(refs: RemoteMessageRef[], labels: string[]): Promise<void>
 
   // Remote search fallback
   searchRemote(query: string, folderId?: string): Promise<RawMessage[]>

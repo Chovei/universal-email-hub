@@ -17,9 +17,10 @@ import {
   type MessageSummary,
 } from '../db/queries/messages'
 import { getFolderByType, getFolderById } from '../db/queries/folders'
-import { getAccountById } from '../db/queries/accounts'
 import { updateThreadStar, updateThreadCounts, getThreadById } from '../db/queries/threads'
 import { SyncEngine } from '../sync/SyncEngine'
+import { buildRemoteRefs } from '../sync/remoteRefs'
+import type { RemoteMessageRef } from '@shared/types/provider'
 
 const DB_BATCH_SIZE = 500
 const UNDO_LIMIT = 10_000
@@ -187,11 +188,12 @@ export class BulkActionEngine {
         for (const [accountId, accountMsgs] of byAccount) {
           const archiveFolder = getFolderByType(accountId, 'archive')
           if (archiveFolder) {
+            // Refs built from the pre-move snapshot: folderId still points at
+            // the folder the messages occupy on the server
+            const refs = buildRemoteRefs(accountMsgs)
             moveMessages(accountMsgs.map((m) => m.id), archiveFolder.id)
             // C1: best-effort provider sync
-            void syncEngine
-              .moveMessages(accountId, accountMsgs.map((m) => m.remoteId), archiveFolder.remoteId)
-              .catch(() => {})
+            void syncEngine.moveMessages(accountId, refs, archiveFolder.remoteId).catch(() => {})
           } else {
             markMessagesRead(accountMsgs.map((m) => m.id), true)
           }
@@ -203,19 +205,16 @@ export class BulkActionEngine {
         const byAccount = this.groupByAccount(msgs)
         const syncEngine = SyncEngine.getInstance()
         for (const [accountId, accountMsgs] of byAccount) {
-          const remoteIds = accountMsgs.map((m) => m.remoteId)
+          const refs = buildRemoteRefs(accountMsgs)
           const trashFolder = options.skipTrash ? null : getFolderByType(accountId, 'trash')
           if (trashFolder) {
             moveMessages(accountMsgs.map((m) => m.id), trashFolder.id)
-            void syncEngine.moveMessages(accountId, remoteIds, trashFolder.remoteId).catch(() => {})
+            void syncEngine.moveMessages(accountId, refs, trashFolder.remoteId).catch(() => {})
           } else {
             deleteMessages(accountMsgs.map((m) => m.id))
-            // IMAP UIDs are mailbox-scoped; without a trash folder we cannot safely
-            // target the right mailbox, so skip remote delete to avoid expunging wrong messages
-            const account = getAccountById(accountId)
-            if (account && account.provider !== 'imap') {
-              void syncEngine.deleteRemoteMessages(accountId, remoteIds).catch(() => {})
-            }
+            // Refs now carry folder context, so IMAP deletes are safe too —
+            // the provider targets each message's actual mailbox
+            void syncEngine.deleteRemoteMessages(accountId, refs).catch(() => {})
           }
         }
         break
@@ -244,11 +243,10 @@ export class BulkActionEngine {
         for (const [accountId, accountMsgs] of byAccount) {
           const spamFolder = getFolderByType(accountId, 'spam')
           if (spamFolder) {
+            const refs = buildRemoteRefs(accountMsgs)
             moveMessages(accountMsgs.map((m) => m.id), spamFolder.id)
             // C1: best-effort provider sync
-            void syncEngine
-              .moveMessages(accountId, accountMsgs.map((m) => m.remoteId), spamFolder.remoteId)
-              .catch(() => {})
+            void syncEngine.moveMessages(accountId, refs, spamFolder.remoteId).catch(() => {})
           }
         }
         break
@@ -260,11 +258,10 @@ export class BulkActionEngine {
         for (const [accountId, accountMsgs] of byAccount) {
           const inboxFolder = getFolderByType(accountId, 'inbox')
           if (inboxFolder) {
+            const refs = buildRemoteRefs(accountMsgs)
             moveMessages(accountMsgs.map((m) => m.id), inboxFolder.id)
             // C1: best-effort provider sync
-            void syncEngine
-              .moveMessages(accountId, accountMsgs.map((m) => m.remoteId), inboxFolder.remoteId)
-              .catch(() => {})
+            void syncEngine.moveMessages(accountId, refs, inboxFolder.remoteId).catch(() => {})
           }
         }
         break
@@ -292,17 +289,17 @@ export class BulkActionEngine {
   // Errors are swallowed — the sync system reconciles on the next cycle.
   private propagateToProvider(
     msgs: MessageSummary[],
-    action: (engine: SyncEngine, accountId: string, remoteIds: string[]) => Promise<void>
+    action: (engine: SyncEngine, accountId: string, refs: RemoteMessageRef[]) => Promise<void>
   ): void {
     const engine = SyncEngine.getInstance()
-    const byAccount = new Map<string, string[]>()
+    const byAccount = new Map<string, MessageSummary[]>()
     for (const m of msgs) {
       const list = byAccount.get(m.accountId) ?? []
-      list.push(m.remoteId)
+      list.push(m)
       byAccount.set(m.accountId, list)
     }
-    for (const [accountId, remoteIds] of byAccount) {
-      void action(engine, accountId, remoteIds).catch(() => {})
+    for (const [accountId, accountMsgs] of byAccount) {
+      void action(engine, accountId, buildRemoteRefs(accountMsgs)).catch(() => {})
     }
   }
 
