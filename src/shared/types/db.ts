@@ -157,6 +157,11 @@ export interface SyncStatus {
   progress?: number
   lastSyncAt?: number
   lastError?: string
+  errorCategory?: 'auth' | 'network' | 'rate-limit' | 'unknown'
+  consecutiveFailures?: number
+  lastSyncDurationMs?: number
+  /** true while an IMAP IDLE watcher holds a live connection for this account */
+  realtime?: boolean
 }
 
 // ── Search ─────────────────────────────────────────────────────────────────

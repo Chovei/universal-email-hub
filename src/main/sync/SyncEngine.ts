@@ -9,6 +9,7 @@ import { ImapProvider } from './providers/ImapProvider'
 import type { BaseProvider } from './providers/BaseProvider'
 import { normalizeMessage } from './normalizer'
 import { describeSyncError } from './syncErrors'
+import { computeBackoffMs } from './backoff'
 import { indexMessageBatch } from '../db/queries/search'
 import { NotificationService } from '../notifications/NotificationService'
 import {
@@ -114,6 +115,7 @@ interface AccountWorker {
   intervalMs: number
   timer: ReturnType<typeof setTimeout> | null
   syncing: boolean
+  consecutiveFailures: number
 }
 
 // ── SyncEngine singleton ───────────────────────────────────────────────────
@@ -191,6 +193,7 @@ export class SyncEngine {
       intervalMs,
       timer: null,
       syncing: false,
+      consecutiveFailures: 0,
     }
     this.workers.set(accountId, worker)
 
@@ -320,7 +323,11 @@ export class SyncEngine {
     const worker = this.workers.get(accountId)
     if (!worker || worker.status.state === 'paused') return
     if (worker.timer) clearTimeout(worker.timer)
-    worker.timer = setTimeout(() => void this.runSync(accountId), worker.intervalMs)
+    // Healthy accounts poll at their configured interval; failing accounts
+    // back off exponentially (with jitter) so a broken server or revoked
+    // credential doesn't get hammered every cycle.
+    const delay = computeBackoffMs(worker.intervalMs, worker.consecutiveFailures)
+    worker.timer = setTimeout(() => void this.runSync(accountId), delay)
   }
 
   private async runSync(accountId: string): Promise<void> {
@@ -328,8 +335,9 @@ export class SyncEngine {
     if (!worker || worker.syncing || worker.status.state === 'paused') return
 
     worker.syncing = true
-    worker.status = { state: 'syncing', progress: 0 }
+    worker.status = { state: 'syncing', progress: 0, realtime: worker.status.realtime }
     this.broadcastStatus(accountId, worker.status)
+    const syncStart = Date.now()
 
     try {
       const providerFolders = await worker.provider.listFolders()
@@ -364,15 +372,28 @@ export class SyncEngine {
       }
 
       updateAccount(accountId, { lastSyncAt: Date.now() })
-      worker.status = { state: 'idle', lastSyncAt: Date.now() }
+      worker.consecutiveFailures = 0
+      worker.status = {
+        state: 'idle',
+        lastSyncAt: Date.now(),
+        lastSyncDurationMs: Date.now() - syncStart,
+        realtime: worker.status.realtime,
+      }
       this.broadcastStatus(accountId, worker.status)
 
       const unread = getTotalUnreadCount()
       this.win?.webContents.send(IPC.WINDOW_SET_BADGE, unread)
     } catch (err: unknown) {
       console.error(`[SyncEngine] account ${accountId} failed:`, err)
-      const { message } = describeSyncError(err)
-      worker.status = { state: 'error', lastError: message }
+      worker.consecutiveFailures++
+      const { message, category } = describeSyncError(err)
+      worker.status = {
+        state: 'error',
+        lastError: message,
+        errorCategory: category,
+        consecutiveFailures: worker.consecutiveFailures,
+        realtime: worker.status.realtime,
+      }
       this.broadcastStatus(accountId, worker.status)
     } finally {
       worker.syncing = false
