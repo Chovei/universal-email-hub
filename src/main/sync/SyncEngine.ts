@@ -10,6 +10,7 @@ import type { BaseProvider } from './providers/BaseProvider'
 import { normalizeMessage } from './normalizer'
 import { describeSyncError } from './syncErrors'
 import { computeBackoffMs } from './backoff'
+import { IdleWatcher } from './IdleWatcher'
 import { indexMessageBatch } from '../db/queries/search'
 import { NotificationService } from '../notifications/NotificationService'
 import {
@@ -116,6 +117,7 @@ interface AccountWorker {
   timer: ReturnType<typeof setTimeout> | null
   syncing: boolean
   consecutiveFailures: number
+  idleWatcher: IdleWatcher | null
 }
 
 // ── SyncEngine singleton ───────────────────────────────────────────────────
@@ -194,8 +196,28 @@ export class SyncEngine {
       timer: null,
       syncing: false,
       consecutiveFailures: 0,
+      idleWatcher: null,
     }
     this.workers.set(accountId, worker)
+
+    // Real-time push for IMAP accounts: a dedicated IDLE connection triggers
+    // the normal sync pipeline the moment the server reports new mail.
+    // Polling stays on as the reconciliation safety net.
+    if (provider instanceof ImapProvider) {
+      const watcher = new IdleWatcher(
+        accountId,
+        () => provider.makeDedicatedClient(),
+        () => void this.runSync(accountId),
+        (connected) => {
+          const w = this.workers.get(accountId)
+          if (!w) return
+          w.status = { ...w.status, realtime: connected }
+          this.broadcastStatus(accountId, w.status)
+        }
+      )
+      worker.idleWatcher = watcher
+      watcher.start()
+    }
 
     // Initial sync fires immediately; polling timer is set after it completes
     void this.runSync(accountId)
@@ -204,6 +226,7 @@ export class SyncEngine {
   removeAccount(accountId: string): void {
     const worker = this.workers.get(accountId)
     if (worker?.timer) clearTimeout(worker.timer)
+    worker?.idleWatcher?.stop()
     this.workers.delete(accountId)
   }
 
@@ -212,6 +235,12 @@ export class SyncEngine {
     if (!worker) return
     if (worker.timer) { clearTimeout(worker.timer); worker.timer = null }
     worker.status = { state: 'idle' }
+    // Restart the IDLE watcher so it drops any backoff loop from the old
+    // connection state and reconnects immediately
+    if (worker.idleWatcher) {
+      worker.idleWatcher.stop()
+      worker.idleWatcher.start()
+    }
     void this.runSync(accountId)
   }
 
@@ -219,6 +248,7 @@ export class SyncEngine {
     const worker = this.workers.get(accountId)
     if (!worker) return
     if (worker.timer) { clearTimeout(worker.timer); worker.timer = null }
+    worker.idleWatcher?.stop()
     worker.status = { state: 'paused' }
     this.broadcastStatus(accountId, worker.status)
   }
@@ -228,6 +258,7 @@ export class SyncEngine {
     if (!worker || worker.status.state !== 'paused') return
     worker.status = { state: 'idle' }
     this.broadcastStatus(accountId, worker.status)
+    worker.idleWatcher?.start()
     void this.runSync(accountId)
   }
 
@@ -307,6 +338,7 @@ export class SyncEngine {
   shutdown(): void {
     for (const [, worker] of this.workers) {
       if (worker.timer) clearTimeout(worker.timer)
+      worker.idleWatcher?.stop()
     }
     this.workers.clear()
   }

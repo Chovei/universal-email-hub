@@ -76,7 +76,15 @@ export class ImapProvider extends BaseProvider {
       tls: { rejectUnauthorized: true },
       auth: { user: creds.username, pass: password },
       logger: false,
+      // Restart IDLE well under the 29-minute RFC 2177 limit — some servers
+      // silently drop connections that idle too long
+      maxIdleTime: 10 * 60 * 1000,
     })
+  }
+
+  /** A fresh connection for long-lived use (IDLE watching). Caller owns lifecycle. */
+  makeDedicatedClient(): ImapFlow {
+    return this.makeClient()
   }
 
   private makeTransport(): nodemailer.Transporter {
