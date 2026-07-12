@@ -10,7 +10,7 @@ export const AddressSchema = z.object({
 // ── Accounts ───────────────────────────────────────────────────────────────
 
 const PROVIDER_ENUM = z.enum([
-  'gmail', 'graph', 'outlook', 'imap', 'yahoo', 'icloud', 'exchange', 'zoho', 'fastmail', 'aol', 'gmx',
+  'gmail', 'graph', 'outlook', 'imap', 'yahoo', 'icloud', 'exchange', 'zoho', 'fastmail', 'aol', 'gmx', 'rambler',
 ])
 
 const CREDENTIALS_SCHEMA = z.object({
