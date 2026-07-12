@@ -60,6 +60,16 @@ export function getMessagesByThreadIds(threadIds: string[]): MessageSummary[] {
     .all() as MessageSummary[]
 }
 
+/** Remote IDs of all messages in a folder — used for IMAP ghost reconciliation. */
+export function getMessageRemoteIdsByFolder(folderId: string): string[] {
+  return getDb()
+    .select({ remoteId: messages.remoteId })
+    .from(messages)
+    .where(eq(messages.folderId, folderId))
+    .all()
+    .map((r) => r.remoteId)
+}
+
 export function upsertMessage(data: MessageInsert): MessageSelect {
   return getDb()
     .insert(messages)

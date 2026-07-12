@@ -6,6 +6,7 @@ import {
   groupRefsByFolder,
   parseAttachmentRef,
   findAttachmentByKey,
+  computeGhostRemoteIds,
 } from './imapHelpers'
 
 describe('mapFolderType', () => {
@@ -88,6 +89,38 @@ describe('groupRefsByFolder', () => {
     const { byFolder, skipped } = groupRefsByFolder([])
     expect(byFolder.size).toBe(0)
     expect(skipped).toBe(0)
+  })
+})
+
+describe('computeGhostRemoteIds', () => {
+  it('returns local UIDs missing from the server set', () => {
+    const ghosts = computeGhostRemoteIds(['1', '2', '3', '4'], ['1', '3'], 2)
+    expect(ghosts).toEqual(['2', '4'])
+  })
+
+  it('returns empty when nothing was deleted', () => {
+    expect(computeGhostRemoteIds(['1', '2'], ['1', '2'], 2)).toEqual([])
+  })
+
+  it('refuses to reconcile when the UID list disagrees with the reported count', () => {
+    // A truncated/flaky SEARCH response must never cause deletions
+    expect(computeGhostRemoteIds(['1', '2', '3'], ['1'], 3)).toEqual([])
+  })
+
+  it('handles a legitimately emptied folder', () => {
+    expect(computeGhostRemoteIds(['1', '2'], [], 0)).toEqual(['1', '2'])
+  })
+
+  it('applies the mass-deletion guard for large suspicious wipes', () => {
+    const local = Array.from({ length: 2000 }, (_, i) => String(i + 1))
+    const server = local.slice(0, 400) // 1600 ghosts — >500 and >half
+    expect(computeGhostRemoteIds(local, server, 400)).toEqual([])
+  })
+
+  it('allows large deletions below the guard threshold', () => {
+    const local = Array.from({ length: 2000 }, (_, i) => String(i + 1))
+    const server = local.slice(300) // 300 ghosts
+    expect(computeGhostRemoteIds(local, server, 1700)).toHaveLength(300)
   })
 })
 

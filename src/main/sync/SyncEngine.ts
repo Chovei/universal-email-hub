@@ -31,7 +31,9 @@ import {
   deleteMessages as dbDeleteMessages,
   getMessagesByThread,
   upsertAttachment,
+  getMessageRemoteIdsByFolder,
 } from '../db/queries/messages'
+import { parseCursor, computeGhostRemoteIds } from './providers/imapHelpers'
 import { getFolderByRemoteId, upsertFolder, updateFolderSyncCursor } from '../db/queries/folders'
 import { getAccountById, updateAccount } from '../db/queries/accounts'
 import { IPC } from '@shared/constants/ipc-channels'
@@ -412,6 +414,25 @@ export class SyncEngine {
         if (result) {
           this.persistSyncResult(accountId, folder.id, result.messages, result.deletedRemoteIds)
           if (result.nextCursor) updateFolderSyncCursor(folder.id, result.nextCursor)
+
+          // Ghost reconciliation: messages deleted in another client vanish
+          // from the server but linger locally. Only for IMAP (Gmail/Graph
+          // report deletions natively), only when UIDVALIDITY is stable
+          // across this sync, and only when the server holds fewer messages
+          // than we do — the cheap signal that something was deleted.
+          if (
+            worker.provider instanceof ImapProvider &&
+            result.serverMessageCount !== undefined &&
+            this.cursorUidValidityStable(cursor, result.nextCursor)
+          ) {
+            await this.reconcileFolderGhosts(
+              accountId,
+              worker.provider,
+              folder.id,
+              folder.remoteId,
+              result.serverMessageCount
+            )
+          }
         }
 
         worker.status = {
@@ -449,6 +470,44 @@ export class SyncEngine {
       worker.syncing = false
       release()
       this.scheduleNextSync(accountId)
+    }
+  }
+
+  // ── Ghost reconciliation (IMAP server-side deletions) ──────────────────
+
+  /** True when both cursors parse and carry the same UIDVALIDITY. */
+  private cursorUidValidityStable(before: string | null, after: string | null): boolean {
+    const a = parseCursor(before)
+    const b = parseCursor(after)
+    return a !== null && b !== null && a.uidvalidity === b.uidvalidity
+  }
+
+  private async reconcileFolderGhosts(
+    accountId: string,
+    provider: ImapProvider,
+    folderId: string,
+    folderRemoteId: string,
+    serverMessageCount: number
+  ): Promise<void> {
+    try {
+      const localRemoteIds = getMessageRemoteIdsByFolder(folderId)
+      // Cheap gate: the expensive UID listing only runs when the server has
+      // fewer messages than we hold — the signature of a deletion elsewhere
+      if (localRemoteIds.length <= serverMessageCount) return
+
+      const { uids, count } = await provider.listFolderUids(folderRemoteId)
+      const ghosts = computeGhostRemoteIds(localRemoteIds, uids, count)
+      if (ghosts.length === 0) return
+
+      console.info(
+        `[SyncEngine] Reconciling ${ghosts.length} server-deleted message(s) in folder ${folderRemoteId} (${accountId})`
+      )
+      // Route through the normal deletion path: threads, counts, and the
+      // search index all update exactly like a provider-reported deletion
+      this.persistSyncResult(accountId, folderId, [], ghosts)
+    } catch (err) {
+      // Reconciliation is best-effort — never let it break the sync cycle
+      console.warn(`[SyncEngine] ghost reconciliation failed for ${folderRemoteId}:`, err)
     }
   }
 

@@ -245,9 +245,10 @@ export class ImapProvider extends BaseProvider {
       await client.connect()
       const lock = await client.getMailboxLock(folderId)
       try {
-        const { uidValidity, uidNext } = client.mailbox as unknown as {
+        const { uidValidity, uidNext, exists } = client.mailbox as unknown as {
           uidValidity?: number
           uidNext?: number
+          exists?: number
         }
 
         const parsed = parseCursor(cursor)
@@ -263,7 +264,8 @@ export class ImapProvider extends BaseProvider {
             folderId,
             parsed.highestUid,
             uidValidity ?? 0,
-            uidNext ?? 1
+            uidNext ?? 1,
+            exists ?? 0
           )
         }
 
@@ -292,6 +294,7 @@ export class ImapProvider extends BaseProvider {
         deletedRemoteIds: [],
         nextCursor: encodeCursor(uidValidity, 0),
         hasMore: false,
+        serverMessageCount: 0,
       }
     }
 
@@ -318,6 +321,7 @@ export class ImapProvider extends BaseProvider {
       deletedRemoteIds: [],
       nextCursor: encodeCursor(uidValidity, highestUid || uidNext - 1),
       hasMore: total > fetchCount,
+      serverMessageCount: total,
     }
   }
 
@@ -326,7 +330,8 @@ export class ImapProvider extends BaseProvider {
     folderId: string,
     lastUid: number,
     uidValidity: number,
-    uidNext: number
+    uidNext: number,
+    serverMessageCount: number
   ): Promise<SyncResult> {
     if (uidNext <= lastUid + 1) {
       // Nothing new since last sync
@@ -335,6 +340,7 @@ export class ImapProvider extends BaseProvider {
         deletedRemoteIds: [],
         nextCursor: encodeCursor(uidValidity, lastUid),
         hasMore: false,
+        serverMessageCount,
       }
     }
 
@@ -358,6 +364,33 @@ export class ImapProvider extends BaseProvider {
       deletedRemoteIds: [],
       nextCursor: encodeCursor(uidValidity, highestUid),
       hasMore: false,
+      serverMessageCount,
+    }
+  }
+
+  /**
+   * Full UID listing for a folder — used by the engine to reconcile
+   * server-side deletions when the server reports fewer messages than we
+   * hold locally. Returns UIDs plus the mailbox's message count so the
+   * caller can validate the listing wasn't truncated.
+   */
+  async listFolderUids(folderRemoteId: string): Promise<{ uids: string[]; count: number }> {
+    const client = this.makeClient()
+    try {
+      await client.connect()
+      const lock = await client.getMailboxLock(folderRemoteId)
+      try {
+        const { exists } = client.mailbox as unknown as { exists?: number }
+        const uids = await client.search({ all: true }, { uid: true })
+        return {
+          uids: (uids || []).map((u) => String(u)),
+          count: exists ?? 0,
+        }
+      } finally {
+        lock.release()
+      }
+    } finally {
+      await client.logout().catch(() => {})
     }
   }
 

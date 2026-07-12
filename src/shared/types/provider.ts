@@ -109,6 +109,12 @@ export interface SyncResult {
   nextCursor: string | null
   hasMore: boolean
   updatedFolders?: ProviderFolder[]
+  /**
+   * Total messages the server reports for this folder (IMAP EXISTS/STATUS).
+   * Lets the engine detect server-side deletions cheaply: fewer on the
+   * server than local means something was deleted elsewhere.
+   */
+  serverMessageCount?: number
 }
 
 export type PushType = 'idle' | 'webhook' | 'polling'

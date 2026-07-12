@@ -71,6 +71,37 @@ export function groupRefsByFolder(refs: RemoteMessageRef[]): GroupedRefs {
   return { byFolder, skipped }
 }
 
+// ── Ghost-message reconciliation ───────────────────────────────────────────
+// Messages deleted in another mail client disappear from the server but
+// linger in the local DB. The diff is guarded three ways because a wrong
+// answer here deletes user-visible mail:
+//  1. the UID list must agree with the server's reported message count
+//     (truncated/flaky SEARCH responses must never cause deletions)
+//  2. callers only invoke this when UIDVALIDITY is unchanged
+//  3. a mass-deletion cap skips wipes that look like provider glitches
+
+const MASS_DELETE_MIN = 500
+
+export function computeGhostRemoteIds(
+  localRemoteIds: string[],
+  serverUids: string[],
+  serverMessageCount: number
+): string[] {
+  if (serverUids.length !== serverMessageCount) return []
+
+  const serverSet = new Set(serverUids)
+  const ghosts = localRemoteIds.filter((id) => !serverSet.has(id))
+
+  if (ghosts.length > MASS_DELETE_MIN && ghosts.length > localRemoteIds.length / 2) {
+    console.warn(
+      `[imap] Skipping ghost reconciliation: ${ghosts.length}/${localRemoteIds.length} messages ` +
+        `missing from server looks like a glitch, not deletions`
+    )
+    return []
+  }
+  return ghosts
+}
+
 // ── Attachment matching ────────────────────────────────────────────────────
 // remoteRef format: "{uid}:{key}" where key is the checksum/filename recorded
 // at sync time (see ImapProvider.parseFetchMessage).
