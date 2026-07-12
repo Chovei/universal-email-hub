@@ -1,4 +1,5 @@
 import { getRawSqlite } from '../client'
+import { parseSearchInput } from './searchQueryParser'
 import type { SearchQuery, SearchResult } from '@shared/types/db'
 
 export function indexMessage(params: {
@@ -77,65 +78,81 @@ export function searchMessages(payload: SearchQuery): SearchResult[] {
   const db = getRawSqlite()
   const { query, filters, limit = 50, offset = 0 } = payload
 
-  const ftsQuery = buildFtsQuery(query)
+  const parsed = parseSearchInput(query)
 
-  const sql = `
-    SELECT
-      m.id as messageId,
-      m.thread_id as threadId,
-      m.account_id as accountId,
-      m.subject,
-      snippet(search_index, 4, '${SNIPPET_OPEN}', '${SNIPPET_CLOSE}', '...', 32) as snippet,
-      m.from_address as fromAddress,
-      m.from_name as fromName,
-      m.date,
-      m.is_read as isRead,
-      m.has_attachment as hasAttachment,
-      search_index.rank as rank
-    FROM search_index
-    JOIN messages m ON m.id = search_index.message_id
-    WHERE search_index MATCH ?
-    ${filters?.accountId ? 'AND m.account_id = ?' : ''}
-    ${filters?.isUnread ? 'AND m.is_read = 0' : ''}
-    ${filters?.hasAttachment ? 'AND m.has_attachment = 1' : ''}
-    ${filters?.isStarred ? 'AND m.is_starred = 1' : ''}
-    ${filters?.dateFrom !== undefined ? 'AND m.date >= ?' : ''}
-    ${filters?.dateTo !== undefined ? 'AND m.date <= ?' : ''}
-    ORDER BY rank LIMIT ? OFFSET ?
-  `
-
-  const params: unknown[] = [ftsQuery]
-  if (filters?.accountId) params.push(filters.accountId)
-  if (filters?.dateFrom !== undefined) params.push(filters.dateFrom)
-  if (filters?.dateTo !== undefined) params.push(filters.dateTo)
-  params.push(limit, offset)
+  // Explicit UI filters win over typed operators
+  const conds: string[] = []
+  const condParams: unknown[] = []
+  if (filters?.accountId) {
+    conds.push('m.account_id = ?')
+    condParams.push(filters.accountId)
+  }
+  if (filters?.isUnread ?? parsed.isUnread) conds.push('m.is_read = 0')
+  if (filters?.hasAttachment ?? parsed.hasAttachment) conds.push('m.has_attachment = 1')
+  if (filters?.isStarred ?? parsed.isStarred) conds.push('m.is_starred = 1')
+  const dateFrom = filters?.dateFrom ?? parsed.dateFrom
+  if (dateFrom !== undefined) {
+    conds.push('m.date >= ?')
+    condParams.push(dateFrom)
+  }
+  const dateTo = filters?.dateTo ?? parsed.dateTo
+  if (dateTo !== undefined) {
+    conds.push('m.date <= ?')
+    condParams.push(dateTo)
+  }
+  if (parsed.accountEmail) {
+    conds.push('m.account_id IN (SELECT id FROM accounts WHERE email LIKE ?)')
+    condParams.push(`%${parsed.accountEmail}%`)
+  }
 
   try {
-    return db.prepare(sql).all(...params) as SearchResult[]
+    if (parsed.ftsQuery) {
+      const sql = `
+        SELECT
+          m.id as messageId,
+          m.thread_id as threadId,
+          m.account_id as accountId,
+          m.subject,
+          snippet(search_index, 4, '${SNIPPET_OPEN}', '${SNIPPET_CLOSE}', '...', 32) as snippet,
+          m.from_address as fromAddress,
+          m.from_name as fromName,
+          m.date,
+          m.is_read as isRead,
+          m.has_attachment as hasAttachment,
+          search_index.rank as rank
+        FROM search_index
+        JOIN messages m ON m.id = search_index.message_id
+        WHERE search_index MATCH ?
+        ${conds.map((c) => `AND ${c}`).join('\n        ')}
+        ORDER BY rank LIMIT ? OFFSET ?
+      `
+      return db.prepare(sql).all(parsed.ftsQuery, ...condParams, limit, offset) as SearchResult[]
+    }
+
+    // Operator-only query (e.g. "is:unread has:attachment") — no text to
+    // MATCH, so filter the messages table directly, newest first
+    if (conds.length === 0) return []
+    const sql = `
+      SELECT
+        m.id as messageId,
+        m.thread_id as threadId,
+        m.account_id as accountId,
+        m.subject,
+        substr(COALESCE(m.body_text, ''), 1, 160) as snippet,
+        m.from_address as fromAddress,
+        m.from_name as fromName,
+        m.date,
+        m.is_read as isRead,
+        m.has_attachment as hasAttachment,
+        0 as rank
+      FROM messages m
+      WHERE ${conds.join(' AND ')}
+      ORDER BY m.date DESC LIMIT ? OFFSET ?
+    `
+    return db.prepare(sql).all(...condParams, limit, offset) as SearchResult[]
   } catch {
     return []
   }
-}
-
-// M3: Use prefix search (word*) instead of phrase search ("word") so that
-//     typing a partial word returns prefix-matching results.
-function buildFtsQuery(input: string): string {
-  let query = input.trim()
-
-  // Support field prefixes: from:, to:, subject:
-  query = query.replace(/\bfrom:(\S+)/g, 'from_address:$1')
-  query = query.replace(/\bto:(\S+)/g, 'to_addresses:$1')
-  query = query.replace(/\bsubject:(\S+)/g, 'subject:$1')
-
-  // Don't rewrite if the user wrote explicit FTS5 boolean operators
-  if (!query.includes('"') && !query.includes('OR') && !query.includes('AND')) {
-    const words = query.split(/\s+/).filter(Boolean)
-    if (words.length > 0) {
-      return words.map((w) => `${w}*`).join(' ')
-    }
-  }
-
-  return query
 }
 
 // H4: Removed OFFSET from the NOT IN loop.  With OFFSET the loop was
