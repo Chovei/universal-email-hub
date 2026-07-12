@@ -26,6 +26,43 @@ function getMigrationsPath(): string {
 
 export function initDatabase(): void {
   const dbPath = getDbPath()
+  try {
+    openAndMigrate(dbPath)
+  } catch (err) {
+    // A corrupt or unreadable database must not brick the app forever.
+    // Preserve the bad files for forensics, then start fresh: mail re-syncs
+    // from the providers (the source of truth) and credentials live in the
+    // OS-encrypted store, not SQLite. Accounts must be re-added — painful,
+    // but infinitely better than an app that never opens again.
+    console.error('[db] open/migrate failed — backing up and recreating database:', err)
+    closeQuietly()
+    backupCorruptDatabase(dbPath)
+    openAndMigrate(dbPath) // a second failure propagates — nothing more we can do
+  }
+}
+
+function closeQuietly(): void {
+  try { _sqlite?.close() } catch { /* already broken */ }
+  _sqlite = null
+  _db = null
+}
+
+function backupCorruptDatabase(dbPath: string): void {
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-')
+  for (const suffix of ['', '-wal', '-shm']) {
+    const file = dbPath + suffix
+    if (fs.existsSync(file)) {
+      try {
+        fs.renameSync(file, `${dbPath}.corrupt-${stamp}${suffix}`)
+      } catch (err) {
+        console.error(`[db] could not preserve ${file}:`, err)
+        try { fs.rmSync(file, { force: true }) } catch { /* last resort */ }
+      }
+    }
+  }
+}
+
+function openAndMigrate(dbPath: string): void {
   const dbDir = path.dirname(dbPath)
 
   if (!fs.existsSync(dbDir)) {

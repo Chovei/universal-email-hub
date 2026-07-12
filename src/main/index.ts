@@ -166,4 +166,13 @@ app.on('before-quit', () => {
   closeDatabase()
 })
 
-void bootstrap()
+bootstrap().catch((err: unknown) => {
+  // Without this, a failed bootstrap leaves the app running with no window
+  // and no explanation — indistinguishable from "nothing happened".
+  logger.error('[main] bootstrap failed:', err)
+  dialog.showErrorBox(
+    'Universal Email Hub could not start',
+    `Something went wrong during startup:\n\n${err instanceof Error ? err.message : String(err)}\n\nPlease restart the app. If this keeps happening, reinstall or report the issue.`
+  )
+  app.quit()
+})
