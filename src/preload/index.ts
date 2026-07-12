@@ -34,6 +34,7 @@ const emailAPI: EmailAPI = {
 
   messages: {
     list: (payload) => invoke(IPC.MESSAGES_LIST, payload),
+    get: (messageId) => invoke(IPC.MESSAGES_GET, messageId),
     getThread: (threadId) => invoke(IPC.MESSAGES_GET_THREAD, threadId),
     markRead: (payload) => invoke(IPC.MESSAGES_MARK_READ, payload),
     star: (payload) => invoke(IPC.MESSAGES_STAR, payload),

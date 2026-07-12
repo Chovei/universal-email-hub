@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
 import { AnimatePresence } from 'framer-motion'
 import { Sidebar } from './Sidebar'
 import { CommandPalette } from '../command-palette/CommandPalette'
@@ -57,6 +58,9 @@ export function AppShell() {
   useEffect(() => {
     return window.emailAPI.app.onNavigate(({ panel }) => setActivePanel(panel))
   }, [setActivePanel])
+
+  // Jump to the Verification Center from anywhere
+  useHotkeys('ctrl+shift+v, meta+shift+v', () => setActivePanel('verification'), [setActivePanel])
 
   // Show add-account wizard automatically when there are no accounts
   useEffect(() => {

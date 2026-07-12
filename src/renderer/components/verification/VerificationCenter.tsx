@@ -1,8 +1,11 @@
-import { useState, useCallback } from 'react'
-import { ShieldCheck, Copy, Check, Trash2, Clock } from 'lucide-react'
+import { useState, useCallback, useMemo } from 'react'
+import { useHotkeys } from 'react-hotkeys-hook'
+import { ShieldCheck, Copy, Check, Trash2, Clock, Mail, Search } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useVerificationCodes } from '../../hooks/useVerificationCodes'
-import type { VerificationCodeRow } from '@shared/types/db'
+import { useMailboxStore } from '../../stores/mailboxStore'
+import { useUIStore } from '../../stores/uiStore'
+import type { VerificationCodeRow, MessageRow } from '@shared/types/db'
 
 function timeAgo(ts: number): string {
   const diffMs = Date.now() - ts
@@ -53,10 +56,12 @@ function CodeCard({
   code,
   onDelete,
   onMarkRead,
+  onOpenEmail,
 }: {
   code: VerificationCodeRow
   onDelete: (id: string) => void
   onMarkRead: (id: string) => void
+  onOpenEmail: (code: VerificationCodeRow) => void
 }) {
   const [copied, setCopied] = useState(false)
 
@@ -84,7 +89,13 @@ function CodeCard({
       {/* Header row */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: color }} />
+          <div
+            className="w-6 h-6 rounded-lg shrink-0 flex items-center justify-center text-[11px] font-bold text-white"
+            style={{ backgroundColor: color }}
+            aria-hidden
+          >
+            {code.serviceName.charAt(0).toUpperCase()}
+          </div>
           <span className="font-semibold text-sm text-[var(--color-foreground)] truncate">
             {code.serviceName}
           </span>
@@ -136,13 +147,23 @@ function CodeCard({
         <span className="text-xs text-[var(--color-muted-foreground)] truncate min-w-0">
           {code.senderEmail}
         </span>
-        <button
-          onClick={() => { void onDelete(code.id) }}
-          className="shrink-0 p-1 rounded text-[var(--color-muted-foreground)] hover:text-red-500 hover:bg-red-500/10 transition-colors"
-          title="Dismiss"
-        >
-          <Trash2 className="w-3.5 h-3.5" />
-        </button>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            onClick={() => onOpenEmail(code)}
+            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-accent)] transition-colors"
+            title="Open the original email"
+          >
+            <Mail className="w-3.5 h-3.5" />
+            Open email
+          </button>
+          <button
+            onClick={() => { void onDelete(code.id) }}
+            className="p-1 rounded text-[var(--color-muted-foreground)] hover:text-red-500 hover:bg-red-500/10 transition-colors"
+            title="Dismiss"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -150,6 +171,20 @@ function CodeCard({
 
 export function VerificationCenter() {
   const { codes, isLoading, unreadCount, markRead, deleteCode } = useVerificationCodes()
+  const [filter, setFilter] = useState('')
+  const selectThread = useMailboxStore((s) => s.selectThread)
+  const setActivePanel = useUIStore((s) => s.setActivePanel)
+
+  const visibleCodes = useMemo(() => {
+    const q = filter.trim().toLowerCase()
+    if (!q) return codes
+    return codes.filter(
+      (c) =>
+        c.serviceName.toLowerCase().includes(q) ||
+        c.senderEmail.toLowerCase().includes(q) ||
+        c.code.toLowerCase().includes(q)
+    )
+  }, [codes, filter])
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -170,6 +205,31 @@ export function VerificationCenter() {
     if (ids.length > 0) await markRead(ids)
   }, [codes, markRead])
 
+  const handleOpenEmail = useCallback(
+    async (code: VerificationCodeRow) => {
+      const result = await window.emailAPI.messages.get(code.messageId)
+      const msg = (result as unknown as { data?: MessageRow }).data
+      if (!msg) return
+      setActivePanel('inbox')
+      selectThread(msg.threadId)
+      if (!code.isRead) void markRead([code.id])
+    },
+    [setActivePanel, selectThread, markRead]
+  )
+
+  // Press "c" to copy the newest code — the fastest path from
+  // "notification arrived" to "code in clipboard"
+  useHotkeys(
+    'c',
+    () => {
+      const newest = codes[0]
+      if (!newest) return
+      void navigator.clipboard.writeText(newest.code)
+      if (!newest.isRead) void markRead([newest.id])
+    },
+    [codes, markRead]
+  )
+
   return (
     <div className="flex flex-col h-full bg-[var(--color-background)]">
       {/* Header */}
@@ -188,14 +248,27 @@ export function VerificationCenter() {
               </p>
             </div>
           </div>
-          {unreadCount > 0 && (
-            <button
-              onClick={() => { void handleMarkAllRead() }}
-              className="text-xs text-[var(--color-primary)] hover:underline font-medium"
-            >
-              Mark all read
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {codes.length > 5 && (
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-muted-foreground)]" />
+                <input
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  placeholder="Filter codes…"
+                  className="pl-8 pr-3 py-1.5 w-48 rounded-lg border border-[var(--color-border)] bg-[var(--color-background)] text-xs text-[var(--color-foreground)] placeholder:text-[var(--color-muted-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]/40"
+                />
+              </div>
+            )}
+            {unreadCount > 0 && (
+              <button
+                onClick={() => { void handleMarkAllRead() }}
+                className="text-xs text-[var(--color-primary)] hover:underline font-medium shrink-0"
+              >
+                Mark all read
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -219,14 +292,19 @@ export function VerificationCenter() {
               </p>
             </div>
           </div>
+        ) : visibleCodes.length === 0 ? (
+          <div className="flex items-center justify-center h-48 text-sm text-[var(--color-muted-foreground)]">
+            No codes match “{filter}”
+          </div>
         ) : (
           <div className="grid gap-3 max-w-2xl">
-            {codes.map((code) => (
+            {visibleCodes.map((code) => (
               <CodeCard
                 key={code.id}
                 code={code}
                 onDelete={(id) => { void handleDelete(id) }}
                 onMarkRead={(id) => { void handleMarkRead(id) }}
+                onOpenEmail={(c) => { void handleOpenEmail(c) }}
               />
             ))}
           </div>

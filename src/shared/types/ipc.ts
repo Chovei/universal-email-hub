@@ -340,6 +340,7 @@ export interface EmailAPI {
   // Messages
   messages: {
     list(payload: ListMessagesPayload): Promise<ListMessagesResult>
+    get(messageId: string): Promise<MessageRow>
     getThread(threadId: string): Promise<GetThreadResult>
     markRead(payload: MarkReadPayload): Promise<void>
     star(payload: StarPayload): Promise<void>

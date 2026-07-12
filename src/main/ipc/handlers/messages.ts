@@ -164,6 +164,19 @@ export function registerMessageHandlers(): void {
     }
   })
 
+  ipcMain.handle(IPC.MESSAGES_GET, async (_event, messageId: unknown) => {
+    try {
+      if (typeof messageId !== 'string' || messageId.length === 0 || messageId.length > 200) {
+        return { error: { code: 'INVALID_ID', message: 'Invalid message id' } }
+      }
+      const msg = getMessageById(messageId)
+      if (!msg) return { error: { code: 'NOT_FOUND', message: 'Message not found' } }
+      return { data: toMessageRow(msg) }
+    } catch (err) {
+      return { error: { code: 'GET_ERROR', message: String(err) } }
+    }
+  })
+
   ipcMain.handle(IPC.MESSAGES_MARK_READ, async (_event, payload: unknown) => {
     try {
       const { messageIds, read } = MarkReadSchema.parse(payload)
