@@ -11,6 +11,11 @@ import { normalizeMessage } from './normalizer'
 import { describeSyncError } from './syncErrors'
 import { computeBackoffMs } from './backoff'
 import { IdleWatcher } from './IdleWatcher'
+import { Semaphore } from './semaphore'
+
+// Cap concurrent account syncs: with many accounts, an unbounded sync storm
+// saturates network, DB, and provider rate limits simultaneously
+const syncSemaphore = new Semaphore(4)
 import { indexMessageBatch } from '../db/queries/search'
 import { NotificationService } from '../notifications/NotificationService'
 import {
@@ -366,7 +371,20 @@ export class SyncEngine {
     const worker = this.workers.get(accountId)
     if (!worker || worker.syncing || worker.status.state === 'paused') return
 
+    // Mark syncing BEFORE queueing on the semaphore so duplicate triggers
+    // (IDLE events, forceSync) are dropped instead of piling up in the queue
     worker.syncing = true
+    const release = await syncSemaphore.acquire()
+
+    // Re-check after the wait — the account may have been paused or removed
+    // while this sync sat in the queue
+    const current = this.workers.get(accountId)
+    if (!current || current.status.state === 'paused') {
+      release()
+      worker.syncing = false
+      return
+    }
+
     worker.status = { state: 'syncing', progress: 0, realtime: worker.status.realtime }
     this.broadcastStatus(accountId, worker.status)
     const syncStart = Date.now()
@@ -429,6 +447,7 @@ export class SyncEngine {
       this.broadcastStatus(accountId, worker.status)
     } finally {
       worker.syncing = false
+      release()
       this.scheduleNextSync(accountId)
     }
   }

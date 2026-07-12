@@ -167,6 +167,16 @@ function ensureSchemaExtensions(): void {
     CREATE INDEX IF NOT EXISTS verification_codes_received_idx
       ON verification_codes (received_at);
   `)
+
+  // Hot-path indexes added after v0.1.16 (idempotent for existing DBs):
+  // - sender lookups (search suggestions, sender filters)
+  // - verification-code dedupe (message identity + 24h account/code window)
+  _sqlite.exec(`
+    CREATE INDEX IF NOT EXISTS messages_from_address_idx ON messages (from_address);
+    CREATE INDEX IF NOT EXISTS verification_codes_message_idx ON verification_codes (message_id);
+    CREATE INDEX IF NOT EXISTS verification_codes_account_code_idx
+      ON verification_codes (account_id, code, received_at);
+  `)
 }
 
 function createFts5Table(): void {

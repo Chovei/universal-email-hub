@@ -124,6 +124,7 @@ export const messages = sqliteTable(
     accountReadIdx: index('messages_account_read_idx').on(t.accountId, t.isRead),
     accountStarredIdx: index('messages_account_starred_idx').on(t.accountId, t.isStarred),
     accountDraftIdx: index('messages_account_draft_idx').on(t.accountId, t.isDraft),
+    fromAddressIdx: index('messages_from_address_idx').on(t.fromAddress),
   })
 )
 
@@ -214,6 +215,8 @@ export const verificationCodes = sqliteTable(
   (t) => ({
     accountReceivedIdx: index('verification_codes_account_received_idx').on(t.accountId, t.receivedAt),
     receivedIdx: index('verification_codes_received_idx').on(t.receivedAt),
+    messageIdx: index('verification_codes_message_idx').on(t.messageId),
+    accountCodeIdx: index('verification_codes_account_code_idx').on(t.accountId, t.code, t.receivedAt),
   })
 )
 
