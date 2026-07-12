@@ -6,6 +6,13 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.18] - 2026-07-12
+
+### 🐛 Fixes
+
+- Release notes now also appear on the GitHub release page, not just inside the app
+- Includes all improvements and fixes from 0.1.17 for users updating from earlier versions
+
 ## [0.1.17] - 2026-07-12
 
 ### ✨ Improvements
@@ -171,7 +178,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.17...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.18...HEAD
+[0.1.18]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.15...v0.1.16
 [0.1.15]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.10...v0.1.15
