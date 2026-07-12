@@ -113,13 +113,17 @@ export class ImapProvider extends BaseProvider {
     try {
       await client.connect()
       for (const [folderPath, uids] of byFolder) {
-        const lock = await client.getMailboxLock(folderPath)
+        // Lock acquisition can itself fail (folder deleted/renamed server-side);
+        // record it and continue with the remaining folder groups
         try {
-          await op(client, uids.join(','))
+          const lock = await client.getMailboxLock(folderPath)
+          try {
+            await op(client, uids.join(','))
+          } finally {
+            lock.release()
+          }
         } catch (err) {
           failures.push(`${folderPath}: ${err instanceof Error ? err.message : String(err)}`)
-        } finally {
-          lock.release()
         }
       }
     } finally {

@@ -168,8 +168,8 @@ export function registerMessageHandlers(): void {
     try {
       const { messageIds, read } = MarkReadSchema.parse(payload)
       markMessagesRead(messageIds, read)
-      propagateToProvider(messageIds, (engine, accountId, remoteIds) =>
-        void engine.markMessagesRead(accountId, remoteIds, read)
+      propagateToProvider(messageIds, (engine, accountId, refs) =>
+        void engine.markMessagesRead(accountId, refs, read)
       )
       return { data: null }
     } catch (err) {
@@ -181,8 +181,8 @@ export function registerMessageHandlers(): void {
     try {
       const { messageIds, starred } = StarSchema.parse(payload)
       starMessages(messageIds, starred)
-      propagateToProvider(messageIds, (engine, accountId, remoteIds) =>
-        void engine.starMessages(accountId, remoteIds, starred)
+      propagateToProvider(messageIds, (engine, accountId, refs) =>
+        void engine.starMessages(accountId, refs, starred)
       )
       return { data: null }
     } catch (err) {
@@ -212,8 +212,8 @@ export function registerMessageHandlers(): void {
   ipcMain.handle(IPC.MESSAGES_DELETE, async (_event, payload: unknown) => {
     try {
       const { messageIds } = DeleteSchema.parse(payload)
-      propagateToProvider(messageIds, (engine, accountId, remoteIds) =>
-        void engine.deleteRemoteMessages(accountId, remoteIds)
+      propagateToProvider(messageIds, (engine, accountId, refs) =>
+        void engine.deleteRemoteMessages(accountId, refs)
       )
       deleteMessages(messageIds)
       return { data: null }
