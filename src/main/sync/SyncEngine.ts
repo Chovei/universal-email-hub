@@ -526,6 +526,12 @@ export class SyncEngine {
                   receivedAt: msgRow.date,
                 })
                 this.win?.webContents.send(IPC.VERIFICATION_CODES_NEW, vcRow)
+                NotificationService.getInstance().notifyVerificationCode({
+                  serviceName: vcRow.serviceName,
+                  code: vcRow.code,
+                  accountEmail: getAccountById(accountId)?.email ?? '',
+                  accountId,
+                })
               } catch { /* non-fatal — never break sync */ }
             }
           }

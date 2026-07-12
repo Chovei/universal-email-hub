@@ -53,6 +53,11 @@ export function AppShell() {
     }
   }, [composerOpen, openComposer, closeUIComposer])
 
+  // Deep links from desktop notifications (main process pushes APP_NAVIGATE)
+  useEffect(() => {
+    return window.emailAPI.app.onNavigate(({ panel }) => setActivePanel(panel))
+  }, [setActivePanel])
+
   // Show add-account wizard automatically when there are no accounts
   useEffect(() => {
     if (accounts.length === 0) {

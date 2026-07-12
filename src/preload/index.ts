@@ -97,6 +97,10 @@ const emailAPI: EmailAPI = {
     onBadgeCount: (cb) => on(IPC.WINDOW_SET_BADGE, cb as (...args: unknown[]) => void),
   },
 
+  app: {
+    onNavigate: (cb) => on(IPC.APP_NAVIGATE, cb as (...args: unknown[]) => void),
+  },
+
   updater: {
     check: () => invoke(IPC.UPDATER_CHECK),
     install: () => invoke(IPC.UPDATER_INSTALL),

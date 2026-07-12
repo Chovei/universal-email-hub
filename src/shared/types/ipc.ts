@@ -410,6 +410,11 @@ export interface EmailAPI {
     onBadgeCount(cb: (count: number) => void): () => void
   }
 
+  // App-level navigation pushes (notification clicks)
+  app: {
+    onNavigate(cb: (payload: { panel: 'inbox' | 'search' | 'settings' | 'verification' }) => void): () => void
+  }
+
   // Auto-updater
   updater: {
     check(): Promise<void>

@@ -67,6 +67,8 @@ export const IPC = {
   PLUGINS_SEND: 'plugins:send',
 
   // ── OS / Window ────────────────────────────────────────────────────────────
+  /** push: main → renderer — navigate the app to a panel (notification clicks) */
+  APP_NAVIGATE: 'app:navigate',
   WINDOW_SET_BADGE: 'window:setBadge',
   WINDOW_FLASH_FRAME: 'window:flashFrame',
   SHELL_OPEN_EXTERNAL: 'shell:openExternal',
