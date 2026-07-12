@@ -24,6 +24,37 @@ function isAvailable(): boolean {
   return _encryptionAvailable
 }
 
+export interface CredentialProtection {
+  /** true when the OS encrypts credentials at rest via safeStorage */
+  encrypted: boolean
+  /** Human-readable mechanism name for the Settings → Security display */
+  method: string
+}
+
+export function getCredentialProtection(): CredentialProtection {
+  if (!isAvailable()) {
+    return { encrypted: false, method: 'None — OS encryption unavailable' }
+  }
+  switch (process.platform) {
+    case 'win32':
+      return { encrypted: true, method: 'Windows DPAPI' }
+    case 'darwin':
+      return { encrypted: true, method: 'macOS Keychain' }
+    default: {
+      // Linux: kwallet/gnome-libsecret/basic-text depending on desktop
+      try {
+        const backend = safeStorage.getSelectedStorageBackend()
+        if (backend === 'basic_text') {
+          return { encrypted: false, method: 'None — no secret service available' }
+        }
+        return { encrypted: true, method: `Secret Service (${backend})` }
+      } catch {
+        return { encrypted: true, method: 'Secret Service' }
+      }
+    }
+  }
+}
+
 export const credentialStore = {
   set(key: string, value: string): void {
     if (isAvailable()) {

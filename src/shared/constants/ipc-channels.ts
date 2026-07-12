@@ -79,6 +79,7 @@ export const IPC = {
   SETTINGS_GET: 'settings:get',
   SETTINGS_SET: 'settings:set',
   SETTINGS_RESET: 'settings:reset',
+  SETTINGS_SECURITY_STATUS: 'settings:securityStatus',
 
   // ── Auto-updater ───────────────────────────────────────────────────────────
   UPDATER_CHECK: 'updater:check',

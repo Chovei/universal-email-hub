@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Sun, Moon, Monitor, Palette, Bell, User, Key, Info, Eye, EyeOff, Trash2, RefreshCw, Download, CheckCircle2, Loader2, Activity } from 'lucide-react'
+import { Sun, Moon, Monitor, Palette, Bell, User, Key, Info, Eye, EyeOff, Trash2, RefreshCw, Download, CheckCircle2, Loader2, Activity, ShieldCheck, ShieldAlert } from 'lucide-react'
 import { AccountHealthList } from './AccountHealth'
 import { cn } from '../../lib/utils'
 import { useUIStore } from '../../stores/uiStore'
@@ -44,6 +44,11 @@ export function SettingsPage() {
           {/* Account health */}
           <Section title="Account Health" icon={<Activity className="w-4 h-4" />}>
             <AccountHealthList />
+          </Section>
+
+          {/* Security */}
+          <Section title="Security" icon={<ShieldCheck className="w-4 h-4" />}>
+            <SecurityStatus />
           </Section>
 
           {/* Appearance */}
@@ -256,6 +261,53 @@ export function SettingsPage() {
           </Section>
         </div>
       </div>
+    </div>
+  )
+}
+
+function SecurityStatus() {
+  const [protection, setProtection] = useState<{ encrypted: boolean; method: string } | null>(null)
+
+  useEffect(() => {
+    void (async () => {
+      const result = await window.emailAPI.settings.securityStatus()
+      const data = (result as unknown as { data?: { encrypted: boolean; method: string } }).data
+      if (data) setProtection(data)
+    })()
+  }, [])
+
+  if (!protection) {
+    return <p className="text-sm text-[var(--color-muted-foreground)]">Checking credential protection…</p>
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        {protection.encrypted ? (
+          <ShieldCheck className="w-4 h-4 text-emerald-500 shrink-0" />
+        ) : (
+          <ShieldAlert className="w-4 h-4 text-amber-500 shrink-0" />
+        )}
+        <span className="text-sm text-[var(--color-foreground)]">
+          Credential protection:{' '}
+          <span className={protection.encrypted ? 'text-emerald-500 font-medium' : 'text-amber-500 font-medium'}>
+            {protection.encrypted ? `✓ ${protection.method} active` : protection.method}
+          </span>
+        </span>
+      </div>
+      {!protection.encrypted && (
+        <p className="text-xs text-[var(--color-muted-foreground)] leading-relaxed">
+          Your operating system does not provide secure credential storage. Account passwords are
+          stored locally with reduced protection — anyone with access to this Windows user profile
+          could read them. On Linux, installing GNOME Keyring or KWallet enables encryption.
+        </p>
+      )}
+      {protection.encrypted && (
+        <p className="text-xs text-[var(--color-muted-foreground)] leading-relaxed">
+          Account passwords and OAuth tokens are encrypted at rest by your operating system and can
+          only be read by this app running under your user account.
+        </p>
+      )}
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { ipcMain } from 'electron'
 import { IPC } from '@shared/constants/ipc-channels'
 import { getSettings, setSetting, resetSettings } from '../../settings'
+import { getCredentialProtection } from '../../security/keychain'
 
 export function registerSettingsHandlers(): void {
   ipcMain.handle(IPC.SETTINGS_GET, async () => {
@@ -29,6 +30,14 @@ export function registerSettingsHandlers(): void {
       return { data: null }
     } catch (err) {
       return { error: { code: 'RESET_ERROR', message: String(err) } }
+    }
+  })
+
+  ipcMain.handle(IPC.SETTINGS_SECURITY_STATUS, async () => {
+    try {
+      return { data: getCredentialProtection() }
+    } catch (err) {
+      return { error: { code: 'SECURITY_STATUS_ERROR', message: String(err) } }
     }
   })
 }

@@ -395,6 +395,7 @@ export interface EmailAPI {
     get(): Promise<AppSettings>
     set(key: string, value: unknown): Promise<void>
     reset(): Promise<void>
+    securityStatus(): Promise<{ encrypted: boolean; method: string }>
   }
 
   // Shell / OS

@@ -84,6 +84,7 @@ const emailAPI: EmailAPI = {
     get: () => invoke(IPC.SETTINGS_GET),
     set: (key, value) => invoke(IPC.SETTINGS_SET, key, value),
     reset: () => invoke(IPC.SETTINGS_RESET),
+    securityStatus: () => invoke(IPC.SETTINGS_SECURITY_STATUS),
   },
 
   shell: {
