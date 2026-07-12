@@ -260,6 +260,19 @@ export function SettingsPage() {
   )
 }
 
+function ReleaseNotes({ notes, version }: { notes: string | null | undefined; version: string }) {
+  return (
+    <div className="w-full max-w-md rounded-lg border border-[var(--color-border)] bg-[var(--color-background)]/60 px-3 py-2.5">
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)] mb-1">
+        What&apos;s new in v{version}
+      </p>
+      <p className="text-xs text-[var(--color-foreground)] whitespace-pre-wrap leading-relaxed max-h-48 overflow-y-auto">
+        {notes?.trim() || 'Bug fixes and improvements.'}
+      </p>
+    </div>
+  )
+}
+
 function UpdateControl({ status }: { status: UpdateStatus | null }) {
   const check = () => { void window.emailAPI.updater.check() }
   const install = () => { void window.emailAPI.updater.install() }
@@ -295,9 +308,12 @@ function UpdateControl({ status }: { status: UpdateStatus | null }) {
 
   if (status.type === 'available') {
     return (
-      <span className="flex items-center gap-2 text-sm text-[var(--color-muted-foreground)]">
-        v{status.version} available — downloading automatically…
-      </span>
+      <div className="flex flex-col gap-2">
+        <span className="text-sm text-[var(--color-muted-foreground)]">
+          v{status.version} available — downloading automatically…
+        </span>
+        <ReleaseNotes notes={status.releaseNotes} version={status.version} />
+      </div>
     )
   }
 
@@ -312,13 +328,16 @@ function UpdateControl({ status }: { status: UpdateStatus | null }) {
 
   if (status.type === 'downloaded') {
     return (
-      <button
-        onClick={install}
-        className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity"
-      >
-        <Download className="w-3.5 h-3.5" />
-        Restart to install v{status.version}
-      </button>
+      <div className="flex flex-col gap-2 items-start">
+        <button
+          onClick={install}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-sm bg-[var(--color-primary)] text-white hover:opacity-90 transition-opacity"
+        >
+          <Download className="w-3.5 h-3.5" />
+          Restart to install v{status.version}
+        </button>
+        <ReleaseNotes notes={status.releaseNotes} version={status.version} />
+      </div>
     )
   }
 

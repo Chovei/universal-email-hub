@@ -106,16 +106,35 @@ class AutoUpdaterService {
     }
   }
 
-  private extractNotes(raw: unknown): string | null {
-    if (!raw) return null
-    if (typeof raw === 'string') return raw
-    if (Array.isArray(raw)) {
-      return raw
+  // The GitHub provider returns the release body rendered as HTML; convert
+  // to readable plain text. Never return empty — an update should always
+  // have a human-visible description.
+  private extractNotes(raw: unknown): string {
+    const FALLBACK = 'Bug fixes and improvements.'
+    let text: string | null = null
+    if (typeof raw === 'string') {
+      text = raw
+    } else if (Array.isArray(raw)) {
+      text = raw
         .map((r) => (typeof r === 'object' && r !== null && 'note' in r ? String((r as Record<string, unknown>).note) : ''))
         .filter(Boolean)
         .join('\n')
     }
-    return null
+    if (!text) return FALLBACK
+
+    const plain = text
+      .replace(/<li[^>]*>/gi, '\n• ')
+      .replace(/<\/(h[1-6]|p|div|ul|ol)>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+
+    return plain || FALLBACK
   }
 }
 

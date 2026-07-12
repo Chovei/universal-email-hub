@@ -6,6 +6,52 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.17] - 2026-07-12
+
+### ✨ Improvements
+
+- Real-time email delivery for IMAP accounts — new mail appears within about a second instead of waiting for the next sync cycle
+- Account Health dashboard in Settings: connection status, live-sync badge, last sync time, message counts, and one-click reconnect
+- Smarter verification-code detection: alphanumeric codes (like Steam Guard), spaced and hyphenated formats, and far fewer false positives from order numbers, years, prices, and phone numbers
+- Verification codes trigger their own desktop notification — click it to jump straight to the Verification Center
+- Search operators: `has:attachment`, `is:unread`, `is:starred`, `after:2026-01-01`, `before:`, and `account:you@example.com`
+- Grouped notifications: many new emails collapse into one summary instead of a notification storm
+- Friendly connection errors when adding accounts, with provider-specific App Password guidance
+- Failing accounts back off automatically instead of retrying every cycle; syncs are capped at 4 concurrent accounts for stability with many inboxes
+- Older messages load in the background beyond the initial 500 per folder
+- Emails deleted in other mail apps now disappear here too (IMAP deletion reconciliation)
+- Settings → Security shows how your credentials are protected (Windows DPAPI / macOS Keychain)
+- Keyboard shortcut overlay — press Ctrl+/ to see every shortcut
+- Release notes now appear with every update
+
+### 🐛 Fixes
+
+- Fixed IMAP operations targeting the wrong mailbox — archive, delete, star, and mark-read now always act on the folder a message actually lives in
+- Fixed attachment downloads returning the first attachment instead of the one you clicked
+- Fixed sent messages via Microsoft 365 getting placeholder IDs that broke reply threading
+- Fixed a corrupt database permanently preventing the app from starting — it now recovers automatically and re-syncs
+- Fixed silent startup failures — problems now show an error dialog
+- Security: patched SMTP command-injection and header-injection vulnerabilities in the email sending library (nodemailer 6 → 9)
+- Empty Trash and Empty Spam now permanently delete on the mail server as well
+
+## [0.1.16] - 2026-07-12
+
+### ✨ Improvements
+
+- Added Rambler.ru as an email provider
+
+### 🐛 Fixes
+
+- Empty Trash and Empty Spam now actually delete messages instead of doing nothing
+
+## [0.1.15] - 2026-07-11
+
+### ✨ Improvements
+
+- Folder management: Empty Trash, Empty Spam, Mark All Read, Archive All Read, and Delete All from sidebar right-click menus and the folder action bar
+- Manage All Accounts section for cross-account cleanup in one click
+- Confirmation dialogs with email counts and storage estimates before destructive actions
+
 ## [0.1.10] - 2026-07-10
 
 ### Fixed
@@ -125,7 +171,10 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.17...HEAD
+[0.1.17]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.16...v0.1.17
+[0.1.16]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.15...v0.1.16
+[0.1.15]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.10...v0.1.15
 [0.1.4]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.3...v0.1.4
 [0.1.3]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.1...v0.1.2

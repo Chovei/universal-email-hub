@@ -83,6 +83,11 @@ publish:
   repo: universal-email-hub
   releaseType: release
 
+# Release body comes from CHANGELOG.md via scripts/extract-release-notes.mjs
+# (runs in prerelease/prepackage); the updater shows it as "What's New"
+releaseInfo:
+  releaseNotesFile: release-notes.md
+
 electronUpdaterCompatibility: ">=2.16"
 
 npmRebuild: true
