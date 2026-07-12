@@ -369,6 +369,44 @@ export class ImapProvider extends BaseProvider {
   }
 
   /**
+   * Fetch one page of history older than `belowUid`. SEARCH finds the
+   * actual existing UIDs below the floor (expunged gaps can't stall the
+   * pagination), then the newest `pageSize` of those are fetched.
+   */
+  async backfillFolder(
+    folderRemoteId: string,
+    belowUid: number,
+    pageSize: number
+  ): Promise<{ messages: RawMessage[]; exhausted: boolean }> {
+    if (belowUid <= 1) return { messages: [], exhausted: true }
+    const client = this.makeClient()
+    try {
+      await client.connect()
+      const lock = await client.getMailboxLock(folderRemoteId)
+      try {
+        const uids = await client.search({ uid: `1:${belowUid - 1}` }, { uid: true })
+        if (!uids || uids.length === 0) return { messages: [], exhausted: true }
+
+        const page = uids.sort((a, b) => a - b).slice(-pageSize)
+        const messages: RawMessage[] = []
+        for await (const msg of client.fetch(
+          { uid: page.join(',') },
+          { envelope: true, source: true, flags: true, uid: true },
+          { uid: true }
+        )) {
+          const parsed = await this.parseFetchMessage(msg, folderRemoteId)
+          if (parsed) messages.push(parsed)
+        }
+        return { messages, exhausted: uids.length <= page.length }
+      } finally {
+        lock.release()
+      }
+    } finally {
+      await client.logout().catch(() => {})
+    }
+  }
+
+  /**
    * Full UID listing for a folder — used by the engine to reconcile
    * server-side deletions when the server reports fewer messages than we
    * hold locally. Returns UIDs plus the mailbox's message count so the

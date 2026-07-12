@@ -60,6 +60,27 @@ export function getMessagesByThreadIds(threadIds: string[]): MessageSummary[] {
     .all() as MessageSummary[]
 }
 
+/** Number of messages held locally for a folder. */
+export function countMessagesByFolder(folderId: string): number {
+  const row = getRawSqlite()
+    .prepare<[string], { n: number }>(`SELECT COUNT(*) AS n FROM messages WHERE folder_id = ?`)
+    .get(folderId)
+  return row?.n ?? 0
+}
+
+/**
+ * Lowest numeric remote ID (IMAP UID) held locally for a folder — the
+ * backfill floor. IMAP-only: other providers' remote IDs are not numeric.
+ */
+export function getMinUidByFolder(folderId: string): number | null {
+  const row = getRawSqlite()
+    .prepare<[string], { minUid: number | null }>(
+      `SELECT MIN(CAST(remote_id AS INTEGER)) AS minUid FROM messages WHERE folder_id = ?`
+    )
+    .get(folderId)
+  return row?.minUid ?? null
+}
+
 /** Remote IDs of all messages in a folder — used for IMAP ghost reconciliation. */
 export function getMessageRemoteIdsByFolder(folderId: string): string[] {
   return getDb()

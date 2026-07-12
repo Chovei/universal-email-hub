@@ -121,6 +121,12 @@ export function AccountHealthList() {
                 {typeof row.status.lastSyncDurationMs === 'number' &&
                   ` in ${(row.status.lastSyncDurationMs / 1000).toFixed(1)}s`}
               </div>
+              {typeof row.status.backfillRemaining === 'number' && row.status.backfillRemaining > 0 && (
+                <div className="text-[11px] text-[var(--color-muted-foreground)] mt-0.5">
+                  Loading older messages in the background —{' '}
+                  {row.status.backfillRemaining.toLocaleString()} remaining
+                </div>
+              )}
               {row.status.state === 'error' && row.status.lastError && (
                 <div className="text-[11px] text-red-500 mt-1">{row.status.lastError}</div>
               )}

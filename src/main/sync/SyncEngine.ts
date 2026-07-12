@@ -32,6 +32,8 @@ import {
   getMessagesByThread,
   upsertAttachment,
   getMessageRemoteIdsByFolder,
+  countMessagesByFolder,
+  getMinUidByFolder,
 } from '../db/queries/messages'
 import { parseCursor, computeGhostRemoteIds } from './providers/imapHelpers'
 import { getFolderByRemoteId, upsertFolder, updateFolderSyncCursor } from '../db/queries/folders'
@@ -400,6 +402,9 @@ export class SyncEngine {
         (a, b) => priorityOrder.indexOf(a.type) - priorityOrder.indexOf(b.type)
       )
 
+      // Folders eligible for history backfill this cycle (IMAP only)
+      const backfillCandidates: Array<{ folderId: string; remoteId: string; serverCount: number }> = []
+
       for (let i = 0; i < sorted.length; i++) {
         const folder = sorted[i]
         const cursor = (folder.syncCursor as string | null) ?? null
@@ -432,6 +437,11 @@ export class SyncEngine {
               folder.remoteId,
               result.serverMessageCount
             )
+            backfillCandidates.push({
+              folderId: folder.id,
+              remoteId: folder.remoteId,
+              serverCount: result.serverMessageCount,
+            })
           }
         }
 
@@ -442,6 +452,14 @@ export class SyncEngine {
         this.broadcastStatus(accountId, worker.status)
       }
 
+      // One page of history per cycle: fills folders beyond the initial 500
+      // in the background, resumable by construction (the DB's lowest UID is
+      // the state), without blocking or delaying the live sync above.
+      let backfillRemaining = 0
+      if (worker.provider instanceof ImapProvider && backfillCandidates.length > 0) {
+        backfillRemaining = await this.backfillOnePage(accountId, worker.provider, backfillCandidates)
+      }
+
       updateAccount(accountId, { lastSyncAt: Date.now() })
       worker.consecutiveFailures = 0
       worker.status = {
@@ -449,6 +467,7 @@ export class SyncEngine {
         lastSyncAt: Date.now(),
         lastSyncDurationMs: Date.now() - syncStart,
         realtime: worker.status.realtime,
+        ...(backfillRemaining > 0 ? { backfillRemaining } : {}),
       }
       this.broadcastStatus(accountId, worker.status)
 
@@ -511,6 +530,49 @@ export class SyncEngine {
     }
   }
 
+  // ── History backfill ─────────────────────────────────────────────────────
+
+  /**
+   * Fetch ONE page of history for the highest-priority folder that has more
+   * messages on the server than locally. Returns the total number of
+   * messages still missing across all candidate folders (for the UI).
+   */
+  private async backfillOnePage(
+    accountId: string,
+    provider: ImapProvider,
+    candidates: Array<{ folderId: string; remoteId: string; serverCount: number }>
+  ): Promise<number> {
+    const PAGE_SIZE = 300
+    let remaining = 0
+    let pageDone = false
+
+    for (const c of candidates) {
+      const localCount = countMessagesByFolder(c.folderId)
+      const deficit = c.serverCount - localCount
+      if (deficit <= 0) continue
+      remaining += deficit
+      if (pageDone) continue
+
+      const minUid = getMinUidByFolder(c.folderId)
+      if (!minUid || minUid <= 1) continue
+
+      try {
+        const { messages } = await provider.backfillFolder(c.remoteId, minUid, PAGE_SIZE)
+        if (messages.length > 0) {
+          this.persistSyncResult(accountId, c.folderId, messages, [], {
+            suppressNotifications: true,
+          })
+          remaining = Math.max(0, remaining - messages.length)
+        }
+      } catch (err) {
+        console.warn(`[SyncEngine] backfill failed for ${c.remoteId}:`, err)
+      }
+      // One page per account per cycle keeps background load bounded
+      pageDone = true
+    }
+    return remaining
+  }
+
   // ── DB persistence helpers ─────────────────────────────────────────────
 
   private persistFolders(accountId: string, folders: ProviderFolder[]): FolderSelect[] {
@@ -532,7 +594,10 @@ export class SyncEngine {
     accountId: string,
     folderId: string,
     messages: RawMessage[],
-    deletedRemoteIds: string[]
+    deletedRemoteIds: string[],
+    // Backfilled history must not fire desktop notifications — the mail is
+    // old, the user has already seen it elsewhere
+    opts: { suppressNotifications?: boolean } = {}
   ): void {
     const newThreadRows: ThreadRow[] = []
     const indexItems: Parameters<typeof indexMessageBatch>[0] = []
@@ -604,12 +669,14 @@ export class SyncEngine {
                   receivedAt: msgRow.date,
                 })
                 this.win?.webContents.send(IPC.VERIFICATION_CODES_NEW, vcRow)
-                NotificationService.getInstance().notifyVerificationCode({
-                  serviceName: vcRow.serviceName,
-                  code: vcRow.code,
-                  accountEmail: getAccountById(accountId)?.email ?? '',
-                  accountId,
-                })
+                if (!opts.suppressNotifications) {
+                  NotificationService.getInstance().notifyVerificationCode({
+                    serviceName: vcRow.serviceName,
+                    code: vcRow.code,
+                    accountEmail: getAccountById(accountId)?.email ?? '',
+                    accountId,
+                  })
+                }
               } catch { /* non-fatal — never break sync */ }
             }
           }
@@ -651,17 +718,19 @@ export class SyncEngine {
 
     if (newThreadRows.length > 0) {
       this.win?.webContents.send(IPC.MESSAGES_NEW, { threads: newThreadRows, accountId })
-      const notifItems = messages
-        .filter((raw) => !raw.isRead)
-        .slice(0, 5)
-        .map((raw) => ({
-          subject: raw.subject,
-          fromName: raw.from.name ?? null,
-          fromAddress: raw.from.address,
-          accountId,
-        }))
-      if (notifItems.length > 0) {
-        NotificationService.getInstance().notifyNewMessages(notifItems)
+      if (!opts.suppressNotifications) {
+        const notifItems = messages
+          .filter((raw) => !raw.isRead)
+          .slice(0, 5)
+          .map((raw) => ({
+            subject: raw.subject,
+            fromName: raw.from.name ?? null,
+            fromAddress: raw.from.address,
+            accountId,
+          }))
+        if (notifItems.length > 0) {
+          NotificationService.getInstance().notifyNewMessages(notifItems)
+        }
       }
     }
   }

@@ -162,6 +162,8 @@ export interface SyncStatus {
   lastSyncDurationMs?: number
   /** true while an IMAP IDLE watcher holds a live connection for this account */
   realtime?: boolean
+  /** messages still being fetched from history in the background (IMAP backfill) */
+  backfillRemaining?: number
 }
 
 // ── Account health ─────────────────────────────────────────────────────────
