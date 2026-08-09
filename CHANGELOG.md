@@ -6,6 +6,12 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.23] - 2026-08-09
+
+### 🐛 Fixes
+
+- Fixed the updater refusing to install because the downloaded file did not match its checksum. The installer was being corrupted while being uploaded, and is now uploaded and verified a different way
+
 ## [0.1.22] - 2026-08-09
 
 ### ✨ Improvements
@@ -221,7 +227,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.22...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.23...HEAD
+[0.1.23]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.22...v0.1.23
 [0.1.22]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.19...v0.1.20
