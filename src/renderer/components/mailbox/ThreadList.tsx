@@ -219,11 +219,11 @@ function ThreadListHeader({
     ?? (selectedFolderType.charAt(0).toUpperCase() + selectedFolderType.slice(1))
 
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-background)] shrink-0">
-      <div>
-        <h2 className="text-sm font-semibold text-[var(--color-foreground)]">{folderLabel}</h2>
+    <div className="flex items-center justify-between px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-background)] shrink-0 overflow-hidden">
+      <div className="min-w-0">
+        <h2 className="text-sm font-semibold text-[var(--color-foreground)] truncate" title={folderLabel}>{folderLabel}</h2>
         {!isLoading && (
-          <p className="text-[11px] text-[var(--color-muted-foreground)] mt-0.5">
+          <p className="text-[11px] text-[var(--color-muted-foreground)] mt-0.5 truncate">
             {selectedCount > 0
               ? `${selectedCount.toLocaleString()} selected`
               : threadCount === 0 ? 'No messages' : `${threadCount} conversations`}
