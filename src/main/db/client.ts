@@ -205,6 +205,26 @@ function ensureSchemaExtensions(): void {
       ON verification_codes (received_at);
   `)
 
+  // Authenticator (TOTP) accounts. METADATA ONLY — there is deliberately no
+  // secret column. Seeds live in the OS-encrypted credential store (see
+  // src/main/totp/totpStore.ts), so a copy of this database yields no ability
+  // to generate codes.
+  _sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS totp_accounts (
+      id TEXT PRIMARY KEY NOT NULL,
+      account_id TEXT,
+      issuer TEXT DEFAULT '' NOT NULL,
+      label TEXT NOT NULL,
+      algorithm TEXT DEFAULT 'SHA1' NOT NULL,
+      digits INTEGER DEFAULT 6 NOT NULL,
+      period INTEGER DEFAULT 30 NOT NULL,
+      verified INTEGER DEFAULT 0 NOT NULL,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS totp_accounts_account_idx ON totp_accounts (account_id);
+  `)
+
   // Hot-path indexes added after v0.1.16 (idempotent for existing DBs):
   // - sender lookups (search suggestions, sender filters)
   // - verification-code dedupe (message identity + 24h account/code window)
