@@ -6,6 +6,14 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.29] - 2026-08-09
+
+### 🐛 Fixes
+
+- Removing an account now also deletes its saved password or sign-in token, which previously stayed on disk indefinitely
+- A setup key that was only partly copied is now rejected with an explanation, instead of being accepted and producing codes that never work
+- Error messages about a mistyped setup key no longer quote any part of the key
+
 ## [0.1.28] - 2026-08-09
 
 ### ✨ Improvements
@@ -265,7 +273,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.28...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.29...HEAD
+[0.1.29]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.28...v0.1.29
 [0.1.28]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.27...v0.1.28
 [0.1.27]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.26...v0.1.27
 [0.1.26]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.25...v0.1.26
