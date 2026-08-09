@@ -14,7 +14,7 @@
     "icons": "node scripts/generate-icons.mjs",
     "package": "npm run build && electron-builder",
     "prepackage": "node scripts/generate-icons.mjs && node scripts/extract-release-notes.mjs",
-    "release": "npm run build && electron-builder --publish always && node scripts/publish-release-notes.mjs",
+    "release": "npm run build && electron-builder --publish always && node scripts/finalize-release.mjs",
     "prerelease": "node scripts/generate-icons.mjs && node scripts/extract-release-notes.mjs",
     "release:dry": "npm run build && electron-builder --publish never",
     "typecheck:main": "tsc --noEmit -p tsconfig.main.json",
