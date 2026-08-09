@@ -9,7 +9,16 @@ import {
   verifyTotpAccount,
   markTotpVerified,
 } from '../../totp/totpStore'
-import { parseOtpauthUri, normalizeSecret, decodeBase32, validateAlgorithm } from '../../totp/totp'
+import { parseOtpauthUri, normalizeSecret, decodeBase32, validateAlgorithm, TotpError } from '../../totp/totp'
+
+/**
+ * Only TotpError messages are written for users and known to be value-free.
+ * Anything else is replaced: String(err) can serialise a stack trace into
+ * renderer state and the on-disk log.
+ */
+function safeMessage(err: unknown, fallback: string): string {
+  return err instanceof TotpError ? err.message : fallback
+}
 
 /**
  * Authenticator IPC.
@@ -52,7 +61,7 @@ export function registerTotpHandlers(): void {
     try {
       return { data: listTotpCodes() }
     } catch (err) {
-      return { error: { code: 'TOTP_LIST_FAILED', message: String(err) } }
+      return { error: { code: 'TOTP_LIST_FAILED', message: safeMessage(err, 'Could not read authenticators') } }
     }
   })
 
@@ -67,7 +76,7 @@ export function registerTotpHandlers(): void {
       return {
         error: {
           code: 'TOTP_URI_INVALID',
-          message: err instanceof Error ? err.message : 'Could not read that link',
+          message: safeMessage(err, 'Could not read that link'),
         },
       }
     }
@@ -95,7 +104,7 @@ export function registerTotpHandlers(): void {
       return {
         error: {
           code: 'TOTP_ADD_FAILED',
-          message: err instanceof Error ? err.message : 'Could not add authenticator',
+          message: safeMessage(err, 'Could not add authenticator'),
         },
       }
     }
@@ -108,7 +117,7 @@ export function registerTotpHandlers(): void {
       if (ok) markTotpVerified(id)
       return { data: { verified: ok } }
     } catch (err) {
-      return { error: { code: 'TOTP_VERIFY_FAILED', message: String(err) } }
+      return { error: { code: 'TOTP_VERIFY_FAILED', message: safeMessage(err, 'Could not verify that code') } }
     }
   })
 
@@ -118,7 +127,7 @@ export function registerTotpHandlers(): void {
       renameTotpAccount(id, issuer.trim(), label.trim())
       return { data: null }
     } catch (err) {
-      return { error: { code: 'TOTP_RENAME_FAILED', message: String(err) } }
+      return { error: { code: 'TOTP_RENAME_FAILED', message: safeMessage(err, 'Could not rename authenticator') } }
     }
   })
 
@@ -128,7 +137,7 @@ export function registerTotpHandlers(): void {
       deleteTotpAccount(id)
       return { data: null }
     } catch (err) {
-      return { error: { code: 'TOTP_DELETE_FAILED', message: String(err) } }
+      return { error: { code: 'TOTP_DELETE_FAILED', message: safeMessage(err, 'Could not remove authenticator') } }
     }
   })
 }

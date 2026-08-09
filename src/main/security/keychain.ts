@@ -87,4 +87,21 @@ export const credentialStore = {
   has(key: string): boolean {
     return store.has(key)
   },
+
+  /** Stored key names (not values) — used to find credentials left behind. */
+  keys(): string[] {
+    return Object.keys(store.store)
+  },
+
+  /** Removes every stored credential whose key begins with `prefix`. */
+  deleteByPrefix(prefix: string): number {
+    let removed = 0
+    for (const key of Object.keys(store.store)) {
+      if (key.startsWith(prefix)) {
+        store.delete(key)
+        removed++
+      }
+    }
+    return removed
+  },
 }

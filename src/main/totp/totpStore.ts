@@ -220,6 +220,27 @@ export function listTotpCodes(atMs: number = Date.now()): TotpCodeView[] {
   })
 }
 
+/**
+ * Delete stored secrets that no longer have a metadata row.
+ *
+ * The database can legitimately be replaced wholesale — corruption recovery
+ * renames it aside and starts fresh (see initDatabase). The credential store
+ * is untouched by that, so without this the seeds would linger with nothing
+ * in the UI referencing them: invisible, permanent, and impossible for the
+ * user to remove. Runs at startup.
+ */
+export function reconcileTotpSecrets(): number {
+  const known = new Set(listTotpAccounts().map((a) => SECRET_KEY(a.id)))
+  let removed = 0
+  for (const key of credentialStore.keys()) {
+    if (key.startsWith('totp:') && !known.has(key)) {
+      credentialStore.delete(key)
+      removed++
+    }
+  }
+  return removed
+}
+
 /** Confirms the user's authenticator agrees with ours (Phase 10 setup check). */
 export function verifyTotpAccount(id: string, candidate: string, atMs: number = Date.now()): boolean {
   const meta = getTotpAccount(id)

@@ -95,7 +95,11 @@ export function registerAccountHandlers(): void {
   ipcMain.handle(IPC.ACCOUNTS_REMOVE, async (_event, accountId: string) => {
     try {
       SyncEngine.getInstance().removeAccount(accountId)
-      credentialStore.delete(`account:${accountId}`)
+      // Credentials are stored under `account:<id>:credentials` and
+      // `account:<id>:tokens`; deleting only `account:<id>` left IMAP
+      // passwords and OAuth refresh tokens on disk permanently after the
+      // user removed the account.
+      credentialStore.deleteByPrefix(`account:${accountId}`)
       deleteAccount(accountId)
       return { data: null }
     } catch (err) {

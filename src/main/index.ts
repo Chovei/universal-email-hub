@@ -9,6 +9,7 @@ import { SyncEngine } from './sync/SyncEngine'
 import { updaterService } from './updater/AutoUpdater'
 import { getAllAccounts } from './db/queries/accounts'
 import { reindexAllMessages } from './db/queries/search'
+import { reconcileTotpSecrets } from './totp/totpStore'
 
 // Initialise logging before everything else so all console.* calls are captured
 initLogger()
@@ -81,6 +82,19 @@ async function initApp(): Promise<void> {
   )
 
   initDatabase()
+
+  // Drop authenticator secrets with no surviving metadata row — otherwise a
+  // database that was replaced (corruption recovery) would strand them in the
+  // credential store forever, with no way for the user to see or remove them.
+  try {
+    const orphans = reconcileTotpSecrets()
+    if (orphans > 0) {
+      logger.warn(`[totp] Removed ${orphans} authenticator secret(s) with no matching account`)
+    }
+  } catch (err) {
+    logger.warn('[totp] Could not reconcile stored authenticator secrets:', err)
+  }
+
   registerAllIpcHandlers()
 }
 

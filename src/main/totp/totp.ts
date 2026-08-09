@@ -26,6 +26,14 @@ const ALLOWED_DIGITS = [6, 7, 8]
 const MIN_PERIOD = 15
 const MAX_PERIOD = 300
 
+/**
+ * RFC 4226 §4 R6 requires at least 128 bits of shared secret and recommends
+ * 160. Ten bytes (80 bits) is the smallest thing any real service issues; a
+ * shorter "secret" means the user truncated it while copying, and silently
+ * accepting it produces codes that never work.
+ */
+const MIN_SECRET_BYTES = 10
+
 export class TotpError extends Error {
   constructor(message: string) {
     super(message)
@@ -54,12 +62,17 @@ export function decodeBase32(raw: string): Buffer {
   let value = 0
   const out: number[] = []
 
-  for (const char of input) {
-    const idx = BASE32_ALPHABET.indexOf(char)
+  for (let i = 0; i < input.length; i++) {
+    const idx = BASE32_ALPHABET.indexOf(input[i])
     if (idx === -1) {
-      // 0, 1, 8 and 9 are absent from the alphabet precisely because they are
-      // easy to confuse with O, I and B when transcribed by hand.
-      throw new TotpError(`Secret contains a character that is not valid Base32: "${char}"`)
+      // Report the POSITION, never the character: this message is returned
+      // across IPC and reaches the on-disk log, and a secret should not leak
+      // itself one keystroke at a time. (0, 1, 8 and 9 are absent from the
+      // alphabet because they are easily confused with O, I and B.)
+      throw new TotpError(
+        `The key contains a character at position ${i + 1} that cannot appear in a setup key. ` +
+          `Valid characters are A–Z and 2–7.`
+      )
     }
     value = (value << 5) | idx
     bits += 5
@@ -69,7 +82,11 @@ export function decodeBase32(raw: string): Buffer {
     }
   }
 
-  if (out.length === 0) throw new TotpError('Secret is too short to be valid')
+  if (out.length < MIN_SECRET_BYTES) {
+    throw new TotpError(
+      'That key is too short to be a real setup key — check it was copied in full.'
+    )
+  }
   return Buffer.from(out)
 }
 

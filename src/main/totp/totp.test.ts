@@ -46,6 +46,27 @@ describe('Base32', () => {
     }
   })
 
+  it('rejects a secret too short to be real', () => {
+    // "AA" decodes to a single zero byte and was previously accepted, which
+    // means a truncated paste produced codes that silently never matched.
+    expect(() => decodeBase32('AA')).toThrow(TotpError)
+    expect(() => decodeBase32('JBSWY3DP')).toThrow(TotpError) // 5 bytes
+    expect(() => decodeBase32('JBSWY3DPEHPK3PXP')).not.toThrow() // 10 bytes, ok
+  })
+
+  it('never echoes secret characters in error messages', () => {
+    // The message crosses IPC and reaches the on-disk log, so it must report
+    // a position rather than the character itself.
+    try {
+      decodeBase32('JBSWY3DP1HPK3PXP')
+      throw new Error('should have thrown')
+    } catch (err) {
+      const msg = (err as Error).message
+      expect(msg).toContain('position')
+      expect(msg).not.toContain('"1"')
+    }
+  })
+
   it('rejects an empty secret', () => {
     expect(() => decodeBase32('')).toThrow(TotpError)
     expect(() => decodeBase32('   ')).toThrow(TotpError)
