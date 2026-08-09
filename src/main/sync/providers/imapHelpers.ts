@@ -35,6 +35,20 @@ export interface ImapCursor {
   highestUid: number
 }
 
+/**
+ * imapflow exposes mailbox.uidValidity as a BigInt, while cursors round-trip
+ * through Number. A BigInt is never strictly equal to a Number in JS, so
+ * comparing the two directly reports "changed" on every single sync and
+ * triggers an endless full re-download. Normalise everything to Number:
+ * UIDVALIDITY is a 32-bit unsigned value (max 4294967295), comfortably
+ * inside the safe-integer range.
+ */
+export function normalizeUidValidity(value: bigint | number | undefined | null): number {
+  if (value === undefined || value === null) return 0
+  const n = typeof value === 'bigint' ? Number(value) : value
+  return Number.isFinite(n) ? n : 0
+}
+
 export function parseCursor(cursor: string | null): ImapCursor | null {
   if (!cursor) return null
   const [v, u] = cursor.split(':').map(Number)

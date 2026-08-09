@@ -34,6 +34,7 @@ import {
   getMessageRemoteIdsByFolder,
   countMessagesByFolder,
   getMinUidByFolder,
+  applyFlagUpdates,
 } from '../db/queries/messages'
 import { parseCursor, computeGhostRemoteIds } from './providers/imapHelpers'
 import { getFolderByRemoteId, upsertFolder, updateFolderSyncCursor } from '../db/queries/folders'
@@ -127,6 +128,12 @@ interface AccountWorker {
   syncing: boolean
   consecutiveFailures: number
   idleWatcher: IdleWatcher | null
+  /**
+   * Set when a sync is requested while one is already running — typically
+   * new mail announced over IDLE mid-cycle. Without it the request was
+   * simply dropped and the message waited for the next poll.
+   */
+  pendingResync: boolean
 }
 
 // ── SyncEngine singleton ───────────────────────────────────────────────────
@@ -206,6 +213,7 @@ export class SyncEngine {
       syncing: false,
       consecutiveFailures: 0,
       idleWatcher: null,
+      pendingResync: false,
     }
     this.workers.set(accountId, worker)
 
@@ -364,19 +372,32 @@ export class SyncEngine {
     const worker = this.workers.get(accountId)
     if (!worker || worker.status.state === 'paused') return
     if (worker.timer) clearTimeout(worker.timer)
+    // Tagged 'poll' so that a tick landing mid-cycle is dropped rather than
+    // queued: the running cycle already covers it, and queueing would start
+    // the next one with no gap whenever a cycle outlasts the interval.
     // Healthy accounts poll at their configured interval; failing accounts
     // back off exponentially (with jitter) so a broken server or revoked
     // credential doesn't get hammered every cycle.
     const delay = computeBackoffMs(worker.intervalMs, worker.consecutiveFailures)
-    worker.timer = setTimeout(() => void this.runSync(accountId), delay)
+    worker.timer = setTimeout(() => void this.runSync(accountId, 'poll'), delay)
   }
 
-  private async runSync(accountId: string): Promise<void> {
+  private async runSync(accountId: string, trigger: 'poll' | 'push' = 'push'): Promise<void> {
     const worker = this.workers.get(accountId)
-    if (!worker || worker.syncing || worker.status.state === 'paused') return
+    if (!worker || worker.status.state === 'paused') return
+
+    // A sync is already in flight. A push (IDLE announcing new mail, or an
+    // explicit user action) carries information this cycle may have missed,
+    // so run again once it finishes instead of making the mail wait for the
+    // next poll. A timer tick carries nothing new — drop it, or a cycle that
+    // outlives the poll interval would re-trigger itself forever.
+    if (worker.syncing) {
+      if (trigger === 'push') worker.pendingResync = true
+      return
+    }
 
     // Mark syncing BEFORE queueing on the semaphore so duplicate triggers
-    // (IDLE events, forceSync) are dropped instead of piling up in the queue
+    // coalesce into pendingResync rather than piling up in the queue
     worker.syncing = true
     const release = await syncSemaphore.acquire()
 
@@ -433,6 +454,20 @@ export class SyncEngine {
         if (result) {
           this.persistSyncResult(accountId, folder.id, result.messages, result.deletedRemoteIds)
           if (result.nextCursor) updateFolderSyncCursor(folder.id, result.nextCursor)
+
+          // Read/starred changes made in another mail client. Incremental
+          // sync only returns NEW messages, so without this a message read
+          // elsewhere would stay unread here indefinitely.
+          if (result.flagUpdates?.length) {
+            const touched = applyFlagUpdates(accountId, result.flagUpdates)
+            for (const threadId of touched) {
+              const siblings = getMessagesByThread(threadId)
+              updateThreadCounts(threadId, siblings.filter((m) => !m.isRead).length, siblings.length)
+            }
+            if (touched.length > 0) {
+              this.send(IPC.MESSAGES_UPDATED, { accountId, threadIds: touched })
+            }
+          }
 
           fetchedTotal += result.messages.length
           // A folder the server says has mail but that holds none locally is
@@ -545,6 +580,14 @@ export class SyncEngine {
       worker.syncing = false
       release()
       this.scheduleNextSync(accountId)
+
+      // Mail announced while this cycle was running still needs collecting.
+      // The flag is cleared before re-entering, so a burst of IDLE events
+      // coalesces into exactly one follow-up rather than a sync loop.
+      if (worker.pendingResync && worker.status.state !== 'paused') {
+        worker.pendingResync = false
+        setImmediate(() => void this.runSync(accountId))
+      }
     }
   }
 
@@ -799,7 +842,7 @@ export class SyncEngine {
    */
   private send(channel: string, payload: unknown): void {
     const win = this.win
-    if (!win || win.isDestroyed()) return
+    if (!win || win.isDestroyed() || win.webContents.isDestroyed()) return
     win.webContents.send(channel, payload)
   }
 

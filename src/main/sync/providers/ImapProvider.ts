@@ -21,6 +21,7 @@ import {
   mapFolderType,
   parseCursor,
   encodeCursor,
+  normalizeUidValidity,
   groupRefsByFolder,
   parseAttachmentRef,
   findAttachmentByKey,
@@ -37,6 +38,9 @@ function loadImapCredentials(accountId: string): BasicCredentials {
   if (!raw) throw new Error('IMAP credentials not found. Please reconnect this account.')
   return JSON.parse(raw) as BasicCredentials
 }
+
+/** How many recently-synced messages to re-check flags for each cycle. */
+const FLAG_WINDOW = 500
 
 // ── Address helpers ────────────────────────────────────────────────────────
 
@@ -245,31 +249,44 @@ export class ImapProvider extends BaseProvider {
       await client.connect()
       const lock = await client.getMailboxLock(folderId)
       try {
-        const { uidValidity, uidNext, exists } = client.mailbox as unknown as {
-          uidValidity?: number
+        const mailbox = client.mailbox as unknown as {
+          uidValidity?: bigint | number
           uidNext?: number
           exists?: number
         }
+        // imapflow reports uidValidity as a BigInt. Comparing it to the
+        // Number parsed from our cursor with !== is ALWAYS true (JS never
+        // considers a Number and a BigInt strictly equal), which made every
+        // sync believe UIDVALIDITY had changed and re-download the whole
+        // folder, forever. Normalise to Number — UIDVALIDITY is a 32-bit
+        // value, so it always fits.
+        const uidValidity = normalizeUidValidity(mailbox.uidValidity)
+        const uidNext = mailbox.uidNext
+        const exists = mailbox.exists
 
         const parsed = parseCursor(cursor)
 
-        // UIDVALIDITY changed → full re-sync required
+        // UIDVALIDITY changed → the server reassigned UIDs, full re-sync
         if (parsed && uidValidity && parsed.uidvalidity !== uidValidity) {
-          return await this.doFullSync(client, folderId, uidValidity ?? 0, uidNext ?? 1)
+          return await this.doFullSync(client, folderId, uidValidity, uidNext ?? 1)
         }
 
         if (parsed && parsed.highestUid > 0) {
+          // uidNext is passed raw: RFC 3501 lets a server omit [UIDNEXT] from
+          // SELECT, and defaulting the unknown to 1 would make the
+          // "nothing new" shortcut below always fire — the folder would
+          // silently stop receiving mail forever.
           return await this.doIncrementalSync(
             client,
             folderId,
             parsed.highestUid,
-            uidValidity ?? 0,
-            uidNext ?? 1,
+            uidValidity,
+            uidNext,
             exists ?? 0
           )
         }
 
-        return await this.doFullSync(client, folderId, uidValidity ?? 0, uidNext ?? 1)
+        return await this.doFullSync(client, folderId, uidValidity, uidNext ?? 1)
       } finally {
         lock.release()
       }
@@ -319,7 +336,10 @@ export class ImapProvider extends BaseProvider {
     return {
       messages,
       deletedRemoteIds: [],
-      nextCursor: encodeCursor(uidValidity, highestUid || uidNext - 1),
+      // Advance only to what actually parsed. Falling back to uidNext-1 when
+      // nothing parsed would skip those messages permanently; a "V:0" cursor
+      // instead fails parseCursor next cycle and retries the full sync.
+      nextCursor: encodeCursor(uidValidity, highestUid),
       hasMore: total > fetchCount,
       serverMessageCount: total,
     }
@@ -330,17 +350,21 @@ export class ImapProvider extends BaseProvider {
     folderId: string,
     lastUid: number,
     uidValidity: number,
-    uidNext: number,
+    uidNext: number | undefined,
     serverMessageCount: number
   ): Promise<SyncResult> {
-    if (uidNext <= lastUid + 1) {
-      // Nothing new since last sync
+    // Only trust the shortcut when the server actually told us UIDNEXT.
+    // When it is unknown, fall through and let UID FETCH answer the
+    // question — the uid <= lastUid guard below discards the message the
+    // normalised range returns when there is genuinely nothing new.
+    if (typeof uidNext === 'number' && uidNext > 0 && uidNext <= lastUid + 1) {
       return {
         messages: [],
         deletedRemoteIds: [],
         nextCursor: encodeCursor(uidValidity, lastUid),
         hasMore: false,
         serverMessageCount,
+        flagUpdates: await this.fetchFlagWindow(client, lastUid),
       }
     }
 
@@ -352,10 +376,16 @@ export class ImapProvider extends BaseProvider {
       { envelope: true, source: true, flags: true, uid: true },
       { uid: true }
     )) {
+      // RFC 3501 ranges are inclusive and normalised, so "501:*" against a
+      // mailbox whose highest UID is 400 still returns UID 400. Without this
+      // guard every incremental sync re-downloads the newest message.
+      const uid = msg.uid ?? 0
+      if (uid <= lastUid) continue
+
       const parsed = await this.parseFetchMessage(msg, folderId)
       if (parsed) {
         messages.push(parsed)
-        if ((msg.uid ?? 0) > highestUid) highestUid = msg.uid ?? 0
+        if (uid > highestUid) highestUid = uid
       }
     }
 
@@ -365,7 +395,45 @@ export class ImapProvider extends BaseProvider {
       nextCursor: encodeCursor(uidValidity, highestUid),
       hasMore: false,
       serverMessageCount,
+      flagUpdates: await this.fetchFlagWindow(client, lastUid),
     }
+  }
+
+  /**
+   * Read/starred state for the most recent already-synced messages. Fetches
+   * flags only — no envelopes, no bodies — so it stays cheap enough to run
+   * every cycle. Bounded to a window because reconciling an entire mailbox
+   * on every poll would undo the point of incremental sync.
+   */
+  private async fetchFlagWindow(
+    client: ImapFlow,
+    lastUid: number
+  ): Promise<SyncResult['flagUpdates']> {
+    if (lastUid <= 0) return []
+    const floor = Math.max(1, lastUid - FLAG_WINDOW + 1)
+    const updates: NonNullable<SyncResult['flagUpdates']> = []
+    try {
+      for await (const msg of client.fetch(
+        { uid: `${floor}:${lastUid}` },
+        { uid: true, flags: true },
+        { uid: true }
+      )) {
+        const uid = msg.uid ?? 0
+        // Inclusive-range normalisation can hand back a UID outside the window
+        if (uid < floor || uid > lastUid) continue
+        const flags = msg.flags ?? new Set<string>()
+        updates.push({
+          remoteId: String(uid),
+          isRead: flags.has('\\Seen'),
+          isStarred: flags.has('\\Flagged'),
+        })
+      }
+    } catch (err) {
+      // Best effort: never fail a sync because flag reconciliation stumbled
+      console.warn(`[ImapProvider:${this.accountId}] flag refresh failed:`, err)
+      return []
+    }
+    return updates
   }
 
   /**

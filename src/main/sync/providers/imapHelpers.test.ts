@@ -7,6 +7,7 @@ import {
   parseAttachmentRef,
   findAttachmentByKey,
   computeGhostRemoteIds,
+  normalizeUidValidity,
 } from './imapHelpers'
 
 describe('mapFolderType', () => {
@@ -59,6 +60,39 @@ describe('cursor round-trip', () => {
 
   it('rejects zero uidvalidity (never valid per RFC 3501)', () => {
     expect(parseCursor('0:5')).toBeNull()
+  })
+})
+
+describe('normalizeUidValidity', () => {
+  it('converts imapflow BigInt values to Number', () => {
+    expect(normalizeUidValidity(1234567890n)).toBe(1234567890)
+  })
+
+  it('passes Numbers through', () => {
+    expect(normalizeUidValidity(42)).toBe(42)
+  })
+
+  it('treats missing values as 0', () => {
+    expect(normalizeUidValidity(undefined)).toBe(0)
+    expect(normalizeUidValidity(null)).toBe(0)
+  })
+
+  it('handles the maximum 32-bit UIDVALIDITY without precision loss', () => {
+    expect(normalizeUidValidity(4294967295n)).toBe(4294967295)
+  })
+
+  it('makes a round-tripped cursor compare equal to the live mailbox value', () => {
+    // The actual production bug: BigInt from imapflow vs Number from the
+    // cursor. Strict inequality across the two types is ALWAYS true, so
+    // every sync thought UIDVALIDITY had changed and re-downloaded the
+    // entire folder. Guard the whole round trip, not just the conversion.
+    const live = 1750000000n
+    const cursor = encodeCursor(normalizeUidValidity(live), 500)
+    const parsed = parseCursor(cursor)
+    expect(parsed).not.toBeNull()
+    expect(parsed!.uidvalidity !== normalizeUidValidity(live)).toBe(false)
+    // and the raw comparison that caused the bug is still demonstrably broken
+    expect((parsed!.uidvalidity as unknown) !== (live as unknown)).toBe(true)
   })
 })
 

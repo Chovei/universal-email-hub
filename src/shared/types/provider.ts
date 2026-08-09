@@ -115,6 +115,12 @@ export interface SyncResult {
    * server than local means something was deleted elsewhere.
    */
   serverMessageCount?: number
+  /**
+   * Read/starred state for messages we already hold. Incremental sync only
+   * returns NEW messages, so without this a mail read in another client
+   * would stay unread here forever. Flags-only fetches carry no bodies.
+   */
+  flagUpdates?: Array<{ remoteId: string; isRead: boolean; isStarred: boolean }>
 }
 
 export type PushType = 'idle' | 'webhook' | 'polling'

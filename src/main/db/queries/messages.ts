@@ -60,6 +60,40 @@ export function getMessagesByThreadIds(threadIds: string[]): MessageSummary[] {
     .all() as MessageSummary[]
 }
 
+/**
+ * Apply server-side read/starred state to messages we already hold, and
+ * return the thread ids whose unread counts need recomputing. Only rows that
+ * actually changed are written, so a steady-state sync costs one SELECT.
+ */
+export function applyFlagUpdates(
+  accountId: string,
+  updates: Array<{ remoteId: string; isRead: boolean; isStarred: boolean }>
+): string[] {
+  if (updates.length === 0) return []
+  const db = getRawSqlite()
+
+  const select = db.prepare<[string, string], { id: string; threadId: string; isRead: number; isStarred: number }>(
+    `SELECT id, thread_id AS threadId, is_read AS isRead, is_starred AS isStarred
+     FROM messages WHERE account_id = ? AND remote_id = ?`
+  )
+  const update = db.prepare(`UPDATE messages SET is_read = ?, is_starred = ? WHERE id = ?`)
+
+  const changedThreads = new Set<string>()
+  db.transaction(() => {
+    for (const u of updates) {
+      const row = select.get(accountId, u.remoteId)
+      if (!row) continue
+      const isRead = u.isRead ? 1 : 0
+      const isStarred = u.isStarred ? 1 : 0
+      if (row.isRead === isRead && row.isStarred === isStarred) continue
+      update.run(isRead, isStarred, row.id)
+      changedThreads.add(row.threadId)
+    }
+  })()
+
+  return [...changedThreads]
+}
+
 /** Number of messages held locally for a folder. */
 export function countMessagesByFolder(folderId: string): number {
   const row = getRawSqlite()
