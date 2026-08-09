@@ -472,7 +472,7 @@ export class SyncEngine {
       this.broadcastStatus(accountId, worker.status)
 
       const unread = getTotalUnreadCount()
-      this.win?.webContents.send(IPC.WINDOW_SET_BADGE, unread)
+      this.send(IPC.WINDOW_SET_BADGE, unread)
     } catch (err: unknown) {
       console.error(`[SyncEngine] account ${accountId} failed:`, err)
       worker.consecutiveFailures++
@@ -668,7 +668,7 @@ export class SyncEngine {
                   subject,
                   receivedAt: msgRow.date,
                 })
-                this.win?.webContents.send(IPC.VERIFICATION_CODES_NEW, vcRow)
+                this.send(IPC.VERIFICATION_CODES_NEW, vcRow)
                 if (!opts.suppressNotifications) {
                   NotificationService.getInstance().notifyVerificationCode({
                     serviceName: vcRow.serviceName,
@@ -712,12 +712,12 @@ export class SyncEngine {
       }
       if (localIds.length > 0) {
         dbDeleteMessages(localIds)
-        this.win?.webContents.send(IPC.MESSAGES_DELETED, localIds)
+        this.send(IPC.MESSAGES_DELETED, localIds)
       }
     }
 
     if (newThreadRows.length > 0) {
-      this.win?.webContents.send(IPC.MESSAGES_NEW, { threads: newThreadRows, accountId })
+      this.send(IPC.MESSAGES_NEW, { threads: newThreadRows, accountId })
       if (!opts.suppressNotifications) {
         const notifItems = messages
           .filter((raw) => !raw.isRead)
@@ -735,7 +735,19 @@ export class SyncEngine {
     }
   }
 
+  /**
+   * Push to the renderer. `this.win?.` guards null but NOT a destroyed
+   * window: on quit, shutdown() stops the IDLE watchers, whose state
+   * callbacks fire after the BrowserWindow is gone — sending there throws
+   * "Object has been destroyed" as an uncaught exception.
+   */
+  private send(channel: string, payload: unknown): void {
+    const win = this.win
+    if (!win || win.isDestroyed()) return
+    win.webContents.send(channel, payload)
+  }
+
   private broadcastStatus(accountId: string, status: SyncStatus): void {
-    this.win?.webContents.send(IPC.ACCOUNTS_SYNC_STATUS_CHANGED, { accountId, status })
+    this.send(IPC.ACCOUNTS_SYNC_STATUS_CHANGED, { accountId, status })
   }
 }
