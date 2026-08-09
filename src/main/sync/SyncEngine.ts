@@ -389,7 +389,8 @@ export class SyncEngine {
       return
     }
 
-    worker.status = { state: 'syncing', progress: 0, realtime: worker.status.realtime }
+    const prevStatus = worker.status
+    worker.status = { state: 'syncing', progress: 0, realtime: prevStatus.realtime }
     this.broadcastStatus(accountId, worker.status)
     const syncStart = Date.now()
 
@@ -405,6 +406,11 @@ export class SyncEngine {
       // Folders eligible for history backfill this cycle (IMAP only)
       const backfillCandidates: Array<{ folderId: string; remoteId: string; serverCount: number }> = []
 
+      // One bad folder must not abort the cycle — but a cycle where EVERY
+      // folder fails is an account-level problem the user has to hear about
+      let folderFailures = 0
+      let firstFolderError: unknown = null
+
       for (let i = 0; i < sorted.length; i++) {
         const folder = sorted[i]
         const cursor = (folder.syncCursor as string | null) ?? null
@@ -413,6 +419,8 @@ export class SyncEngine {
           .syncFolder(folder.remoteId, cursor)
           .catch((err: unknown) => {
             console.error(`[SyncEngine] syncFolder ${folder.remoteId}:`, err)
+            folderFailures++
+            if (firstFolderError === null) firstFolderError = err
             return null
           })
 
@@ -448,8 +456,32 @@ export class SyncEngine {
         worker.status = {
           state: 'syncing',
           progress: Math.round(((i + 1) / sorted.length) * 100),
+          realtime: prevStatus.realtime,
         }
         this.broadcastStatus(accountId, worker.status)
+      }
+
+      // Every folder failing means the account is broken, not one bad mailbox
+      // — say so instead of reporting a clean sync. The first such cycle stays
+      // quiet so a transient blip never flashes an account red; from the second
+      // consecutive one it surfaces in Account Health, and the raised failure
+      // count lets scheduleNextSync back off a server that isn't answering.
+      if (sorted.length > 0 && folderFailures === sorted.length) {
+        worker.consecutiveFailures++
+        const { message, category } = describeSyncError(firstFolderError)
+        worker.status =
+          worker.consecutiveFailures > 1
+            ? {
+                state: 'error',
+                lastError: `Could not sync any of the ${sorted.length} folders. ${message}`,
+                errorCategory: category,
+                consecutiveFailures: worker.consecutiveFailures,
+                lastSyncAt: prevStatus.lastSyncAt,
+                realtime: prevStatus.realtime,
+              }
+            : { ...prevStatus, state: 'idle' }
+        this.broadcastStatus(accountId, worker.status)
+        return
       }
 
       // One page of history per cycle: fills folders beyond the initial 500
@@ -466,7 +498,7 @@ export class SyncEngine {
         state: 'idle',
         lastSyncAt: Date.now(),
         lastSyncDurationMs: Date.now() - syncStart,
-        realtime: worker.status.realtime,
+        realtime: prevStatus.realtime,
         ...(backfillRemaining > 0 ? { backfillRemaining } : {}),
       }
       this.broadcastStatus(accountId, worker.status)
@@ -482,7 +514,7 @@ export class SyncEngine {
         lastError: message,
         errorCategory: category,
         consecutiveFailures: worker.consecutiveFailures,
-        realtime: worker.status.realtime,
+        realtime: prevStatus.realtime,
       }
       this.broadcastStatus(accountId, worker.status)
     } finally {
