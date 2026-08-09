@@ -13,6 +13,16 @@ import { reindexAllMessages } from './db/queries/search'
 // Initialise logging before everything else so all console.* calls are captured
 initLogger()
 
+// Windows identifies an app by its AppUserModelID: it ties the running
+// process to the Start Menu shortcut the NSIS installer created, which is
+// what taskbar grouping, pinning and jump lists key off. Must match the
+// electron-builder `appId`, and must be set before any window or
+// notification exists. (This is app identity — it is NOT what enables
+// toasts; the OS-level notification toggle governs that.)
+if (process.platform === 'win32') {
+  app.setAppUserModelId('com.universalemailhub.app')
+}
+
 // C1/H11: Catch unhandled errors before anything else
 process.on('uncaughtException', (err) => {
   logger.error('[main] Uncaught exception:', err)

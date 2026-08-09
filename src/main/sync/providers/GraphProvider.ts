@@ -427,21 +427,41 @@ export class GraphProvider extends BaseProvider {
     const url =
       `/me/mailFolders/${folderId}/messages/delta` +
       `?$select=${MSG_SELECT}&${ATT_EXPAND}&$top=50&$orderby=receivedDateTime desc`
-    const { messages, deltaLink } = await this.pageDelta(url, folderId, accessToken, 500)
-    return { messages, deletedRemoteIds: [], nextCursor: deltaLink, hasMore: false }
+    const { messages, deltaLink, resumeLink } = await this.pageDelta(url, folderId, accessToken, 500)
+    // A folder larger than the page cap stops before Graph hands over a
+    // deltaLink. Persisting the outstanding nextLink lets the next cycle
+    // carry on from there; returning null instead meant the folder restarted
+    // from scratch every single cycle and never finished.
+    return {
+      messages,
+      deletedRemoteIds: [],
+      nextCursor: deltaLink ?? resumeLink,
+      hasMore: Boolean(resumeLink),
+    }
   }
 
   private async doDelta(
     folderId: string, deltaLink: string, accessToken: string
   ): Promise<SyncResult> {
-    const { messages, deletedRemoteIds, deltaLink: newLink } =
+    const { messages, deletedRemoteIds, deltaLink: newLink, resumeLink } =
       await this.pageDelta(deltaLink, folderId, accessToken)
-    return { messages, deletedRemoteIds, nextCursor: newLink ?? deltaLink, hasMore: false }
+    return {
+      messages,
+      deletedRemoteIds,
+      nextCursor: newLink ?? resumeLink ?? deltaLink,
+      hasMore: Boolean(resumeLink),
+    }
   }
 
   private async pageDelta(
     startUrl: string, folderId: string, accessToken: string, max = Infinity
-  ): Promise<{ messages: RawMessage[]; deletedRemoteIds: string[]; deltaLink: string | null }> {
+  ): Promise<{
+    messages: RawMessage[]
+    deletedRemoteIds: string[]
+    deltaLink: string | null
+    /** Outstanding nextLink when the page cap stopped us mid-folder. */
+    resumeLink: string | null
+  }> {
     const messages: RawMessage[] = []
     const deletedRemoteIds: string[] = []
     let next: string | null = startUrl
@@ -460,7 +480,7 @@ export class GraphProvider extends BaseProvider {
       deltaLink = page['@odata.deltaLink'] ?? deltaLink
       next = page['@odata.nextLink'] ?? null
     }
-    return { messages, deletedRemoteIds, deltaLink }
+    return { messages, deletedRemoteIds, deltaLink, resumeLink: next }
   }
 
   // ── Message fetch ─────────────────────────────────────────────────────

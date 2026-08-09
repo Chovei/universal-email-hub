@@ -94,6 +94,19 @@ export class NotificationService {
       win.webContents.send(IPC.APP_NAVIGATE, { panel: opts.panel })
     })
 
+    // Windows reports refusals here with an HRESULT and nothing else surfaces
+    // them: Notification.show() returns normally and isSupported() still says
+    // true, so a machine with notifications switched off at the OS level looks
+    // identical to one that is working. Without this listener there is no way
+    // to tell the difference. 0x803E0114 = WPN_E_NOTIFICATION_TYPE_DISABLED.
+    notification.on('failed', (_event, error) => {
+      console.error(
+        `[notifications] "${opts.title}" was not shown by the OS: ${error}. ` +
+          `If this is WPN_E_NOTIFICATION_TYPE_DISABLED (HRESULT -2143420140), ` +
+          `notifications are turned off in Windows Settings > System > Notifications.`
+      )
+    })
+
     notification.show()
   }
 

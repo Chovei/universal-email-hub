@@ -16,6 +16,17 @@ import { Semaphore } from './semaphore'
 // Cap concurrent account syncs: with many accounts, an unbounded sync storm
 // saturates network, DB, and provider rate limits simultaneously
 const syncSemaphore = new Semaphore(4)
+
+/**
+ * How often to check just the inbox for providers that cannot push.
+ * IMAP accounts hold an IDLE connection and learn about mail immediately;
+ * Microsoft Graph has no push channel a desktop app can receive on (its
+ * change notifications require a public HTTPS endpoint), so the inbox is
+ * polled instead. One delta request per account per tick — far inside
+ * Outlook's 10,000-requests-per-10-minutes-per-mailbox limit, and faster
+ * than Graph's own documented push latency (under 1 min average).
+ */
+const FAST_POLL_MS = 10_000
 import { indexMessageBatch } from '../db/queries/search'
 import { NotificationService } from '../notifications/NotificationService'
 import {
@@ -128,6 +139,8 @@ interface AccountWorker {
   syncing: boolean
   consecutiveFailures: number
   idleWatcher: IdleWatcher | null
+  /** Inbox-only poll for providers with no push channel (see FAST_POLL_MS). */
+  fastTimer: ReturnType<typeof setTimeout> | null
   /**
    * Set when a sync is requested while one is already running — typically
    * new mail announced over IDLE mid-cycle. Without it the request was
@@ -214,6 +227,7 @@ export class SyncEngine {
       consecutiveFailures: 0,
       idleWatcher: null,
       pendingResync: false,
+      fastTimer: null,
     }
     this.workers.set(accountId, worker)
 
@@ -243,6 +257,7 @@ export class SyncEngine {
   removeAccount(accountId: string): void {
     const worker = this.workers.get(accountId)
     if (worker?.timer) clearTimeout(worker.timer)
+    if (worker?.fastTimer) clearTimeout(worker.fastTimer)
     worker?.idleWatcher?.stop()
     this.workers.delete(accountId)
   }
@@ -265,6 +280,7 @@ export class SyncEngine {
     const worker = this.workers.get(accountId)
     if (!worker) return
     if (worker.timer) { clearTimeout(worker.timer); worker.timer = null }
+    if (worker.fastTimer) { clearTimeout(worker.fastTimer); worker.fastTimer = null }
     worker.idleWatcher?.stop()
     worker.status = { state: 'paused' }
     this.broadcastStatus(accountId, worker.status)
@@ -355,6 +371,7 @@ export class SyncEngine {
   shutdown(): void {
     for (const [, worker] of this.workers) {
       if (worker.timer) clearTimeout(worker.timer)
+      if (worker.fastTimer) clearTimeout(worker.fastTimer)
       worker.idleWatcher?.stop()
     }
     this.workers.clear()
@@ -382,17 +399,37 @@ export class SyncEngine {
     worker.timer = setTimeout(() => void this.runSync(accountId, 'poll'), delay)
   }
 
-  private async runSync(accountId: string, trigger: 'poll' | 'push' = 'push'): Promise<void> {
+  /**
+   * Inbox-only tick for accounts with no push channel. IMAP accounts already
+   * learn about new mail over IDLE, so they are skipped; only providers like
+   * Microsoft Graph, which cannot push to a desktop app, need this.
+   */
+  private scheduleFastPoll(accountId: string): void {
+    const worker = this.workers.get(accountId)
+    if (!worker || worker.status.state === 'paused') return
+    if (worker.idleWatcher) return // real-time already; polling adds nothing
+    if (worker.fastTimer) clearTimeout(worker.fastTimer)
+    worker.fastTimer = setTimeout(() => void this.runSync(accountId, 'fast'), FAST_POLL_MS)
+  }
+
+  private async runSync(
+    accountId: string,
+    trigger: 'poll' | 'push' | 'fast' = 'push'
+  ): Promise<void> {
     const worker = this.workers.get(accountId)
     if (!worker || worker.status.state === 'paused') return
 
     // A sync is already in flight. A push (IDLE announcing new mail, or an
     // explicit user action) carries information this cycle may have missed,
     // so run again once it finishes instead of making the mail wait for the
-    // next poll. A timer tick carries nothing new — drop it, or a cycle that
-    // outlives the poll interval would re-trigger itself forever.
+    // next poll. Timer-driven triggers carry nothing new — drop them, or a
+    // cycle outliving its interval would re-trigger itself forever. Each
+    // dropped tick must still re-arm ITS OWN timer, otherwise that loop
+    // stops for good the first time it collides with a running sync.
     if (worker.syncing) {
       if (trigger === 'push') worker.pendingResync = true
+      else if (trigger === 'fast') this.scheduleFastPoll(accountId)
+      else this.scheduleNextSync(accountId)
       return
     }
 
@@ -420,9 +457,12 @@ export class SyncEngine {
       const dbFolders = this.persistFolders(accountId, providerFolders)
 
       const priorityOrder = ['inbox', 'sent', 'drafts', 'trash', 'spam', 'custom']
-      const sorted = [...dbFolders].sort(
+      const allSorted = [...dbFolders].sort(
         (a, b) => priorityOrder.indexOf(a.type) - priorityOrder.indexOf(b.type)
       )
+      // The fast tick exists purely to surface new mail quickly, so it looks
+      // at the inbox and nothing else. Everything else stays on the full cycle.
+      const sorted = trigger === 'fast' ? allSorted.filter((f) => f.type === 'inbox') : allSorted
 
       // Folders eligible for history backfill this cycle (IMAP only)
       const backfillCandidates: Array<{ folderId: string; remoteId: string; serverCount: number }> = []
@@ -540,16 +580,29 @@ export class SyncEngine {
       // in the background, resumable by construction (the DB's lowest UID is
       // the state), without blocking or delaying the live sync above.
       let backfillRemaining = 0
-      if (worker.provider instanceof ImapProvider && backfillCandidates.length > 0) {
+      if (
+        trigger !== 'fast' &&
+        worker.provider instanceof ImapProvider &&
+        backfillCandidates.length > 0
+      ) {
         backfillRemaining = await this.backfillOnePage(accountId, worker.provider, backfillCandidates)
       }
 
+      // Fast ticks run every few seconds; logging each one would bury the
+      // full-cycle lines that are actually diagnostic. Only report one when
+      // it found something.
       const label = getAccountById(accountId)?.email ?? accountId
-      console.info(
-        `[SyncEngine] ${label}: ${sorted.length} folders, ${fetchedTotal} message(s) fetched, ` +
-          `${folderFailures} folder error(s), ${Date.now() - syncStart}ms` +
-          (anomalies.length > 0 ? ` | EMPTY: ${anomalies.slice(0, 4).join('; ')}` : '')
-      )
+      if (trigger !== 'fast') {
+        console.info(
+          `[SyncEngine] ${label}: ${sorted.length} folders, ${fetchedTotal} message(s) fetched, ` +
+            `${folderFailures} folder error(s), ${Date.now() - syncStart}ms` +
+            (anomalies.length > 0 ? ` | EMPTY: ${anomalies.slice(0, 4).join('; ')}` : '')
+        )
+      } else if (fetchedTotal > 0) {
+        console.info(
+          `[SyncEngine] ${label}: fast poll picked up ${fetchedTotal} message(s) in ${Date.now() - syncStart}ms`
+        )
+      }
 
       updateAccount(accountId, { lastSyncAt: Date.now() })
       worker.consecutiveFailures = 0
@@ -579,7 +632,11 @@ export class SyncEngine {
     } finally {
       worker.syncing = false
       release()
-      this.scheduleNextSync(accountId)
+      // A fast tick must not push the full cycle back, or a 10s inbox poll
+      // would keep resetting the 60s timer and the other folders would never
+      // sync at all.
+      if (trigger !== 'fast') this.scheduleNextSync(accountId)
+      this.scheduleFastPoll(accountId)
 
       // Mail announced while this cycle was running still needs collecting.
       // The flag is cleared before re-entering, so a burst of IDLE events
