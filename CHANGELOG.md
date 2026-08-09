@@ -6,6 +6,14 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.28] - 2026-08-09
+
+### ✨ Improvements
+
+- **Authenticator codes.** For accounts that use an authenticator app instead of emailed codes, Email Hub can now generate the six-digit code itself. Add the account's setup key once and its code appears in the Verification Center alongside your email codes, with a countdown and a copy button
+- Setup accepts either a setup key or an `otpauth://` link, and confirms the code matches before finishing
+- Authenticator keys are stored encrypted by Windows and never leave your computer; Email Hub refuses to save one if your system cannot encrypt it
+
 ## [0.1.27] - 2026-08-09
 
 ### 🐛 Fixes
@@ -257,7 +265,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.27...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.28...HEAD
+[0.1.28]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.27...v0.1.28
 [0.1.27]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.26...v0.1.27
 [0.1.26]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.24...v0.1.25
