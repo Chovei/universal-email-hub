@@ -163,11 +163,21 @@ interface GraphFolder {
   totalItemCount?: number; unreadItemCount?: number
 }
 
-const MSG_SELECT = [
+const MSG_SELECT_BASE = [
   'id', 'subject', 'bodyPreview', 'from', 'toRecipients', 'ccRecipients', 'bccRecipients',
   'replyTo', 'body', 'receivedDateTime', 'isRead', 'flag', 'hasAttachments', 'isDraft',
-  'conversationId', 'categories', 'internetMessageHeaders',
-].join(',')
+  'conversationId', 'categories',
+]
+
+// Collection and delta queries. internetMessageHeaders is deliberately absent:
+// Graph documents it for a single-message GET, and on a 50-message page it
+// adds each message's entire Received: chain — a large payload for headers
+// nothing in the sync path reads (threading uses conversationId).
+const MSG_SELECT = MSG_SELECT_BASE.join(',')
+
+// Single-message GET, where headers are documented to work and the payload
+// cost is one message rather than a full page.
+const MSG_SELECT_FULL = [...MSG_SELECT_BASE, 'internetMessageHeaders'].join(',')
 
 // contentId lives on microsoft.graph.fileAttachment, NOT on the base
 // microsoft.graph.attachment that $expand binds its nested $select against.
@@ -458,7 +468,7 @@ export class GraphProvider extends BaseProvider {
   async fetchMessage(remoteId: string): Promise<RawMessage> {
     const { accessToken } = await this.validTokens()
     const msg = await graphGet(
-      `/me/messages/${remoteId}?$select=${MSG_SELECT}&${ATT_EXPAND}`, accessToken
+      `/me/messages/${remoteId}?$select=${MSG_SELECT_FULL}&${ATT_EXPAND}`, accessToken
     ) as GraphMessage
     const raw = parseGraphMessage(msg, '')
     if (!raw) throw new Error(`Could not parse message ${remoteId}`)
