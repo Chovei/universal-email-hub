@@ -6,6 +6,19 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.21] - 2026-08-09
+
+### ✨ Improvements
+
+- **New mail arrives much faster.** Every folder was re-downloading its entire recent history on every sync instead of just fetching what was new — syncs that should take under a second were taking 25–150 seconds, and new mail announced by the server was ignored while one was running
+- Mail marked read, unread or starred in another mail app now updates here too
+- New mail that arrives while a sync is already running is picked up immediately afterwards instead of waiting for the next check
+
+### 🐛 Fixes
+
+- Fixed folders being able to stop receiving new mail permanently on mail servers that omit certain optional information
+- Fixed messages being skipped forever if a sync could not read them the first time
+
 ## [0.1.20] - 2026-08-09
 
 ### 🐛 Fixes
@@ -196,7 +209,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.20...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.21...HEAD
+[0.1.21]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.17...v0.1.18
