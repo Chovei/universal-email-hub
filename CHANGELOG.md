@@ -6,6 +6,16 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.26] - 2026-08-09
+
+### ✨ Improvements
+
+- Deleting a verification code now also moves the email it came from to Trash, on your computer and on the mail server
+
+### 🐛 Fixes
+
+- **Fixed emails whose text was invisible until you selected it.** Messages are now shown on a white background, the way mail is written to be read, instead of dark text landing on the dark app background
+
 ## [0.1.25] - 2026-08-09
 
 ### ✨ Improvements
@@ -239,7 +249,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.25...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.26...HEAD
+[0.1.26]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.22...v0.1.23
