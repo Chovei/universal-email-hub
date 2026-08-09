@@ -10,6 +10,7 @@ import {
   markTotpVerified,
 } from '../../totp/totpStore'
 import { parseOtpauthUri, normalizeSecret, decodeBase32, validateAlgorithm, TotpError } from '../../totp/totp'
+import { parseMigrationUri } from '../../totp/migration'
 
 /**
  * Only TotpError messages are written for users and known to be value-free.
@@ -77,6 +78,23 @@ export function registerTotpHandlers(): void {
         error: {
           code: 'TOTP_URI_INVALID',
           message: safeMessage(err, 'Could not read that link'),
+        },
+      }
+    }
+  })
+
+  // Decodes a Google Authenticator "Transfer accounts" export, which can
+  // carry many accounts at once. Like parseUri, this only reads data the
+  // renderer supplied; it touches nothing in storage.
+  ipcMain.handle(IPC.TOTP_PARSE_MIGRATION, async (_event, payload: unknown) => {
+    try {
+      const { uri } = UriSchema.parse(payload)
+      return { data: parseMigrationUri(uri) }
+    } catch (err) {
+      return {
+        error: {
+          code: 'TOTP_MIGRATION_INVALID',
+          message: safeMessage(err, 'Could not read that export link'),
         },
       }
     }

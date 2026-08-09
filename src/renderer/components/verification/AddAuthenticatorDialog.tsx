@@ -2,7 +2,12 @@ import { useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { X, ShieldAlert, KeyRound, Loader2, CheckCircle2 } from 'lucide-react'
 import { cn } from '../../lib/utils'
-import type { TotpAddPayload, TotpAccountMeta, TotpProvisioning } from '@shared/types/ipc'
+import type {
+  TotpAddPayload,
+  TotpAccountMeta,
+  TotpProvisioning,
+  TotpMigrationEntry,
+} from '@shared/types/ipc'
 
 type Envelope<T> = { data?: T; error?: { code: string; message: string } }
 
@@ -25,15 +30,33 @@ export function AddAuthenticatorDialog({
     period: 30,
   })
   const [created, setCreated] = useState<TotpAccountMeta | null>(null)
+  const [migration, setMigration] = useState<TotpMigrationEntry[]>([])
   const [verifyCode, setVerifyCode] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  // Pasting an otpauth:// link fills every field, including the ones most
-  // people would otherwise have to guess at.
+  // Pasting a link fills every field, including the ones most people would
+  // otherwise have to guess at. A Google Authenticator export carries many
+  // accounts at once and switches the dialog into bulk-import mode.
   const tryParseUri = useCallback(async (value: string) => {
-    if (!value.trim().toLowerCase().startsWith('otpauth://')) return false
-    const res = (await window.emailAPI.totp.parseUri(value.trim())) as unknown as Envelope<TotpProvisioning>
+    const trimmed = value.trim()
+    const lower = trimmed.toLowerCase()
+
+    if (lower.startsWith('otpauth-migration://')) {
+      const res = (await window.emailAPI.totp.parseMigration(trimmed)) as unknown as Envelope<
+        TotpMigrationEntry[]
+      >
+      if (res.error || !res.data) {
+        setError(res.error?.message ?? 'That export could not be read')
+        return true
+      }
+      setMigration(res.data)
+      setError('')
+      return true
+    }
+
+    if (!lower.startsWith('otpauth://')) return false
+    const res = (await window.emailAPI.totp.parseUri(trimmed)) as unknown as Envelope<TotpProvisioning>
     if (res.error || !res.data) {
       setError(res.error?.message ?? 'That link could not be read')
       return true
@@ -45,6 +68,32 @@ export function AddAuthenticatorDialog({
     setError('')
     return true
   }, [])
+
+  const importAll = useCallback(async () => {
+    const usable = migration.filter((m) => !m.unsupportedReason)
+    setBusy(true)
+    setError('')
+    let added = 0
+    for (const entry of usable) {
+      const res = (await window.emailAPI.totp.add({
+        secret: entry.secret,
+        issuer: entry.issuer,
+        label: entry.label,
+        algorithm: entry.algorithm,
+        digits: entry.digits,
+        period: entry.period,
+      })) as unknown as Envelope<TotpAccountMeta>
+      if (res.data) added++
+    }
+    setBusy(false)
+    setMigration([])
+    onAdded()
+    if (added === 0) {
+      setError('None of those accounts could be added')
+      return
+    }
+    onClose()
+  }, [migration, onAdded, onClose])
 
   const handleSecretChange = useCallback(
     (value: string) => {
@@ -158,9 +207,60 @@ export function AddAuthenticatorDialog({
             </div>
           )}
 
-          {step === 'details' && (
+          {step === 'details' && migration.length > 0 && (
             <div className="flex flex-col gap-3">
-              <Field label="Setup key or otpauth:// link">
+              <p className="text-sm text-[var(--color-foreground)]">
+                Found <span className="font-medium">{migration.length}</span> account
+                {migration.length === 1 ? '' : 's'} in that export.
+              </p>
+              <div className="max-h-56 overflow-y-auto flex flex-col gap-1 rounded-lg border border-[var(--color-border)] p-2">
+                {migration.map((m, i) => (
+                  <div
+                    key={`${m.issuer}:${m.label}:${i}`}
+                    className="flex items-center justify-between gap-2 px-1.5 py-1 text-xs"
+                  >
+                    <span className="truncate text-[var(--color-foreground)]">
+                      <span className="font-medium">{m.issuer || 'Unknown'}</span>
+                      {m.label && <span className="text-[var(--color-muted-foreground)]"> · {m.label}</span>}
+                    </span>
+                    {m.unsupportedReason ? (
+                      <span className="shrink-0 text-amber-500" title={m.unsupportedReason}>
+                        skipped
+                      </span>
+                    ) : (
+                      <span className="shrink-0 text-emerald-500">will import</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11px] text-[var(--color-muted-foreground)]">
+                Your phone keeps working exactly as it does now — the same key can live on any number
+                of devices, and they all show the same code.
+              </p>
+              {error && <p className="text-xs text-red-500">{error}</p>}
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => { setMigration([]); setSecret('') }}
+                  className="px-3 py-1.5 rounded-lg text-sm border border-[var(--color-border)] text-[var(--color-foreground)] hover:bg-[var(--color-accent)]"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={() => void importAll()}
+                  disabled={busy || migration.every((m) => m.unsupportedReason)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50"
+                >
+                  {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Import {migration.filter((m) => !m.unsupportedReason).length} account
+                  {migration.filter((m) => !m.unsupportedReason).length === 1 ? '' : 's'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'details' && migration.length === 0 && (
+            <div className="flex flex-col gap-3">
+              <Field label="Setup key, otpauth:// link, or Google Authenticator export">
                 <input
                   value={secret}
                   onChange={(e) => handleSecretChange(e.target.value)}

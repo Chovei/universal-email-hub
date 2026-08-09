@@ -116,6 +116,7 @@ export const IPC = {
   TOTP_LIST: 'totp:list',
   TOTP_ADD: 'totp:add',
   TOTP_PARSE_URI: 'totp:parseUri',
+  TOTP_PARSE_MIGRATION: 'totp:parseMigration',
   TOTP_VERIFY: 'totp:verify',
   TOTP_RENAME: 'totp:rename',
   TOTP_DELETE: 'totp:delete',

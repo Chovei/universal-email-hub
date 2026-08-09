@@ -331,6 +331,11 @@ export interface TotpProvisioning {
   period: number
 }
 
+export interface TotpMigrationEntry extends TotpProvisioning {
+  /** Present when Email Hub cannot use this entry (e.g. counter-based). */
+  unsupportedReason?: string
+}
+
 export interface TotpAddPayload {
   secret: string
   issuer: string
@@ -485,6 +490,8 @@ export interface EmailAPI {
     list(): Promise<TotpCodeView[]>
     /** Parses an otpauth:// link the user pasted, for the setup form. */
     parseUri(uri: string): Promise<TotpProvisioning>
+    /** Decodes a Google Authenticator export, which may hold many accounts. */
+    parseMigration(uri: string): Promise<TotpMigrationEntry[]>
     add(payload: TotpAddPayload): Promise<TotpAccountMeta>
     verify(id: string, code: string): Promise<{ verified: boolean }>
     rename(id: string, issuer: string, label: string): Promise<void>
