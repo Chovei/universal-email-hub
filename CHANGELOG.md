@@ -6,6 +6,18 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.22] - 2026-08-09
+
+### ✨ Improvements
+
+- **Outlook mail now arrives within seconds instead of up to a minute.** Gmail already gets an instant push from the server; Microsoft offers no such push to a desktop app, so Outlook inboxes are now checked every 10 seconds
+- Desktop notifications that Windows refuses to display are now reported in the log with the likely reason, instead of failing silently
+
+### 🐛 Fixes
+
+- Fixed Outlook folders with more than 500 messages restarting their download from scratch on every sync instead of continuing where they left off
+- Windows now correctly identifies the app for taskbar grouping and pinning
+
 ## [0.1.21] - 2026-08-09
 
 ### ✨ Improvements
@@ -209,7 +221,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.21...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.22...HEAD
+[0.1.22]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.21...v0.1.22
 [0.1.21]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.20...v0.1.21
 [0.1.20]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.18...v0.1.19
