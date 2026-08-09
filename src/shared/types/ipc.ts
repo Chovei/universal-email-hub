@@ -430,7 +430,8 @@ export interface EmailAPI {
   verificationCodes: {
     list(limit?: number): Promise<VerificationCodeRow[]>
     markRead(ids: string[]): Promise<void>
-    delete(ids: string[]): Promise<void>
+    /** trashEmail also moves the email each code came from to Trash. */
+    delete(ids: string[], trashEmail?: boolean): Promise<{ trashedMessages: number }>
     onNew(cb: (code: VerificationCodeRow) => void): () => void
   }
 

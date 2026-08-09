@@ -51,13 +51,21 @@ export function MessageBubble({
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
+          <!-- Email HTML is written assuming a light background, and most of
+               it specifies dark text without ever specifying a background.
+               Render on white and declare a light color-scheme, or in dark
+               theme that text lands on the app's dark backdrop and becomes
+               invisible until selected. -->
+          <meta name="color-scheme" content="light">
           <style>
             * { box-sizing: border-box; margin: 0; padding: 0; }
+            html { background: #ffffff; }
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
               font-size: 14px;
               line-height: 1.6;
               color: #18181b;
+              background: #ffffff;
               padding: 0;
               word-break: break-word;
             }
@@ -165,8 +173,10 @@ export function MessageBubble({
                 <iframe
                   ref={iframeRef}
                   sandbox="allow-same-origin"
-                  className="w-full border-0 block"
-                  style={{ height: iframeHeight }}
+                  className="w-full border-0 block rounded-[var(--radius-md)]"
+                  // Matches the document background so there is no dark flash
+                  // before the content loads
+                  style={{ height: iframeHeight, background: '#ffffff' }}
                   title="Email content"
                 />
               ) : (

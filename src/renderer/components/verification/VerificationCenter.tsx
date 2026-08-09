@@ -176,7 +176,8 @@ function CodeCard({
           <button
             onClick={() => { void onDelete(code.id) }}
             className="p-1 rounded text-[var(--color-muted-foreground)] hover:text-red-500 hover:bg-red-500/10 transition-colors"
-            title="Dismiss"
+            title="Delete code and move its email to Trash"
+            aria-label="Delete code and move its email to Trash"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -213,7 +214,9 @@ export function VerificationCenter() {
 
   const handleDelete = useCallback(
     async (id: string) => {
-      await deleteCode([id])
+      // Also moves the email the code came from to Trash — recoverable there
+      // if it was a mis-click.
+      await deleteCode([id], true)
     },
     [deleteCode]
   )

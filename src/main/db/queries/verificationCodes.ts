@@ -106,6 +106,17 @@ export function markVerificationCodesRead(ids: string[]): void {
   db.prepare(`UPDATE verification_codes SET is_read = 1 WHERE id IN (${placeholders})`).run(...ids)
 }
 
+/** The messages these codes were extracted from, for trashing the source email. */
+export function getMessageIdsForCodes(ids: string[]): string[] {
+  if (ids.length === 0) return []
+  const db = getRawSqlite()
+  const placeholders = ids.map(() => '?').join(',')
+  const rows = db
+    .prepare(`SELECT message_id AS messageId FROM verification_codes WHERE id IN (${placeholders})`)
+    .all(...ids) as { messageId: string }[]
+  return [...new Set(rows.map((r) => r.messageId))]
+}
+
 export function deleteVerificationCodes(ids: string[]): void {
   if (ids.length === 0) return
   const db = getRawSqlite()

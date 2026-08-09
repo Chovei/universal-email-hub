@@ -24,8 +24,8 @@ export function useVerificationCodes() {
     setCodes((prev) => prev.map((c) => (ids.includes(c.id) ? { ...c, isRead: true } : c)))
   }, [])
 
-  const deleteCode = useCallback(async (ids: string[]) => {
-    await window.emailAPI.verificationCodes.delete(ids)
+  const deleteCode = useCallback(async (ids: string[], trashEmail = false) => {
+    await window.emailAPI.verificationCodes.delete(ids, trashEmail)
     setCodes((prev) => prev.filter((c) => !ids.includes(c.id)))
   }, [])
 

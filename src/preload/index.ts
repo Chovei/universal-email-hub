@@ -114,7 +114,8 @@ const emailAPI: EmailAPI = {
   verificationCodes: {
     list: (limit?: number) => invoke(IPC.VERIFICATION_CODES_LIST, limit),
     markRead: (ids: string[]) => invoke(IPC.VERIFICATION_CODES_MARK_READ, ids),
-    delete: (ids: string[]) => invoke(IPC.VERIFICATION_CODES_DELETE, ids),
+    delete: (ids: string[], trashEmail?: boolean) =>
+      invoke(IPC.VERIFICATION_CODES_DELETE, ids, trashEmail ?? false),
     onNew: (cb) => on(IPC.VERIFICATION_CODES_NEW, cb as (...args: unknown[]) => void),
   },
 
