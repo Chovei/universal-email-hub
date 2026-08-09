@@ -47,3 +47,4 @@ dev.db
 # ── electron-builder ──────────────────────────────────────────────────────
 app-update.yml
 release-notes.md
+r.json
