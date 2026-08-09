@@ -411,6 +411,12 @@ export class SyncEngine {
       let folderFailures = 0
       let firstFolderError: unknown = null
 
+      // Observability: a successful sync used to log nothing at all, which is
+      // how a provider rejecting every message request went unnoticed for a
+      // month. Record what each folder actually returned and stored.
+      let fetchedTotal = 0
+      const anomalies: string[] = []
+
       for (let i = 0; i < sorted.length; i++) {
         const folder = sorted[i]
         const cursor = (folder.syncCursor as string | null) ?? null
@@ -427,6 +433,17 @@ export class SyncEngine {
         if (result) {
           this.persistSyncResult(accountId, folder.id, result.messages, result.deletedRemoteIds)
           if (result.nextCursor) updateFolderSyncCursor(folder.id, result.nextCursor)
+
+          fetchedTotal += result.messages.length
+          // A folder the server says has mail but that holds none locally is
+          // the signature of a sync that "succeeds" while returning nothing
+          const serverCount = result.serverMessageCount ?? folder.totalCount
+          if (serverCount > 0) {
+            const localCount = countMessagesByFolder(folder.id)
+            if (localCount === 0) {
+              anomalies.push(`${folder.name}: server=${serverCount} fetched=${result.messages.length} stored=0`)
+            }
+          }
 
           // Ghost reconciliation: messages deleted in another client vanish
           // from the server but linger locally. Only for IMAP (Gmail/Graph
@@ -491,6 +508,13 @@ export class SyncEngine {
       if (worker.provider instanceof ImapProvider && backfillCandidates.length > 0) {
         backfillRemaining = await this.backfillOnePage(accountId, worker.provider, backfillCandidates)
       }
+
+      const label = getAccountById(accountId)?.email ?? accountId
+      console.info(
+        `[SyncEngine] ${label}: ${sorted.length} folders, ${fetchedTotal} message(s) fetched, ` +
+          `${folderFailures} folder error(s), ${Date.now() - syncStart}ms` +
+          (anomalies.length > 0 ? ` | EMPTY: ${anomalies.slice(0, 4).join('; ')}` : '')
+      )
 
       updateAccount(accountId, { lastSyncAt: Date.now() })
       worker.consecutiveFailures = 0

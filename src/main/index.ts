@@ -159,11 +159,25 @@ app.on('activate', () => {
   }
 })
 
+// Each shutdown step is isolated: closing the database performs the WAL
+// checkpoint that folds recent writes back into emails.db, so it must run
+// even if an earlier step throws. It previously did not — a throw inside
+// SyncEngine.shutdown() skipped closeDatabase() entirely, leaving every
+// write stranded in an ever-growing WAL.
 app.on('before-quit', () => {
-  crashGuard.commitCleanShutdown()
-  updaterService.destroy()
-  SyncEngine.getInstance().shutdown()
-  closeDatabase()
+  const steps: Array<[string, () => void]> = [
+    ['crashGuard', () => crashGuard.commitCleanShutdown()],
+    ['updater', () => updaterService.destroy()],
+    ['syncEngine', () => SyncEngine.getInstance().shutdown()],
+    ['database', () => closeDatabase()],
+  ]
+  for (const [name, run] of steps) {
+    try {
+      run()
+    } catch (err) {
+      logger.error(`[main] shutdown step "${name}" failed:`, err)
+    }
+  }
 })
 
 bootstrap().catch((err: unknown) => {
