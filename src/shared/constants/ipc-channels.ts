@@ -110,6 +110,15 @@ export const IPC = {
 
   // ── Folder management (Phase 8B) ──────────────────────────────────────────
   FOLDER_EXECUTE: 'folder:execute',
+
+  // ── Authenticator (TOTP) ──────────────────────────────────────────────────
+  // Codes only: no channel ever returns a stored secret.
+  TOTP_LIST: 'totp:list',
+  TOTP_ADD: 'totp:add',
+  TOTP_PARSE_URI: 'totp:parseUri',
+  TOTP_VERIFY: 'totp:verify',
+  TOTP_RENAME: 'totp:rename',
+  TOTP_DELETE: 'totp:delete',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

@@ -297,6 +297,50 @@ export interface PluginManifest {
 
 // ── Updater ────────────────────────────────────────────────────────────────
 
+// ── Authenticator (TOTP) ───────────────────────────────────────────────────
+
+export type TotpAlgorithm = 'SHA1' | 'SHA256' | 'SHA512'
+
+/** Describes an authenticator. Intentionally has no secret field. */
+export interface TotpAccountMeta {
+  id: string
+  accountId: string | null
+  issuer: string
+  label: string
+  algorithm: TotpAlgorithm
+  digits: number
+  period: number
+  verified: boolean
+  createdAt: number
+  updatedAt: number
+}
+
+/** Metadata plus a code that expires within `remainingSeconds`. */
+export interface TotpCodeView extends TotpAccountMeta {
+  code: string | null
+  remainingSeconds: number
+  error?: string
+}
+
+export interface TotpProvisioning {
+  secret: string
+  issuer: string
+  label: string
+  algorithm: TotpAlgorithm
+  digits: number
+  period: number
+}
+
+export interface TotpAddPayload {
+  secret: string
+  issuer: string
+  label: string
+  algorithm: TotpAlgorithm
+  digits: number
+  period: number
+  accountId?: string | null
+}
+
 export type UpdateStatus =
   | { type: 'checking' }
   | { type: 'not-available' }
@@ -433,6 +477,18 @@ export interface EmailAPI {
     /** trashEmail also moves the email each code came from to Trash. */
     delete(ids: string[], trashEmail?: boolean): Promise<{ trashedMessages: number }>
     onNew(cb: (code: VerificationCodeRow) => void): () => void
+  }
+
+  // Authenticator (TOTP). No method returns a stored secret — by design.
+  totp: {
+    /** Metadata plus the current short-lived code for each authenticator. */
+    list(): Promise<TotpCodeView[]>
+    /** Parses an otpauth:// link the user pasted, for the setup form. */
+    parseUri(uri: string): Promise<TotpProvisioning>
+    add(payload: TotpAddPayload): Promise<TotpAccountMeta>
+    verify(id: string, code: string): Promise<{ verified: boolean }>
+    rename(id: string, issuer: string, label: string): Promise<void>
+    remove(id: string): Promise<void>
   }
 
   // Bulk operations

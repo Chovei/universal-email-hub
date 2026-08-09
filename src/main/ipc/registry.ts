@@ -12,6 +12,7 @@ import { registerVerificationHandlers } from './handlers/verificationCodes'
 import { registerBulkHandlers } from './handlers/bulk'
 import { registerFolderActionHandlers } from './handlers/folder-actions'
 import { registerHealthHandlers } from './handlers/health'
+import { registerTotpHandlers } from './handlers/totp'
 
 export function registerAllIpcHandlers(): void {
   registerAccountHandlers()
@@ -28,4 +29,5 @@ export function registerAllIpcHandlers(): void {
   registerBulkHandlers()
   registerFolderActionHandlers()
   registerHealthHandlers()
+  registerTotpHandlers()
 }
