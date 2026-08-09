@@ -6,6 +6,12 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.25] - 2026-08-09
+
+### ✨ Improvements
+
+- Verification codes now show which of your inboxes received them, so you can tell at a glance which account a code belongs to. You can also filter codes by that address
+
 ## [0.1.24] - 2026-08-09
 
 ### 🐛 Fixes
@@ -233,7 +239,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.24...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.25...HEAD
+[0.1.25]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.23...v0.1.24
 [0.1.23]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.22...v0.1.23
 [0.1.22]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.21...v0.1.22
