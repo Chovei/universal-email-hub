@@ -6,6 +6,13 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.20] - 2026-08-09
+
+### 🐛 Fixes
+
+- Email Hub now records what each sync actually did, so a provider silently returning nothing can be spotted immediately instead of looking like a healthy account
+- Fixed the app skipping its database save-on-exit after an internal error while quitting, which left recent mail stranded in the journal file instead of written to the database
+
 ## [0.1.19] - 2026-08-09
 
 ### 🐛 Fixes
@@ -189,7 +196,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.19...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.20...HEAD
+[0.1.20]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.19...v0.1.20
 [0.1.19]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.16...v0.1.17
