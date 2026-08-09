@@ -1,4 +1,4 @@
-import { ipcMain, dialog } from 'electron'
+import { ipcMain } from 'electron'
 import path from 'path'
 import fs from 'fs'
 import { IPC } from '@shared/constants/ipc-channels'

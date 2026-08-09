@@ -106,8 +106,8 @@ function looksLikePhoneContext(text: string, index: number, matchLength: number)
   let start = index
   let end = index + matchLength
   const isPhoneChar = (c: string) => /[\d\s()+\-.]/.test(c)
-  while (start > 0 && isPhoneChar(text[start - 1]!)) start--
-  while (end < text.length && isPhoneChar(text[end]!)) end++
+  while (start > 0 && isPhoneChar(text[start - 1])) start--
+  while (end < text.length && isPhoneChar(text[end])) end++
   const expansion = text.slice(start, end)
   const digitCount = (expansion.match(/\d/g) ?? []).length
   return digitCount > 8 || /[+(]/.test(expansion)
@@ -134,11 +134,11 @@ export function extractVerification(
   for (const text of [body, subject]) {
     const m = CONTEXT_RE.exec(text)
     if (m) {
-      const code = cleanCode(m[1]!)
-      const codeIndex = m.index + m[0].indexOf(m[1]!)
+      const code = cleanCode(m[1])
+      const codeIndex = m.index + m[0].indexOf(m[1])
       // Alphanumeric tokens must contain a digit — pure words like "PASS" aren't codes
       const validShape = /\d/.test(code) && code.length >= 4
-      if (validShape && passesFilters(text, codeIndex, m[1]!, code)) {
+      if (validShape && passesFilters(text, codeIndex, m[1], code)) {
         return { code, confidence: code.length <= 5 ? 0.85 : 0.95 }
       }
     }
@@ -148,8 +148,8 @@ export function extractVerification(
   if (/\b(code|otp|pin|passcode|2fa|verification)\b/i.test(subject)) {
     const m = /\b(\d{3}[\s-]\d{3,5}|\d{4,8})\b/.exec(subject)
     if (m) {
-      const code = cleanCode(m[1]!)
-      if (passesFilters(subject, m.index, m[1]!, code)) {
+      const code = cleanCode(m[1])
+      if (passesFilters(subject, m.index, m[1], code)) {
         return { code, confidence: 0.9 }
       }
     }
@@ -160,8 +160,8 @@ export function extractVerification(
     const re = /\b(\d{3}[\s-]\d{3,5}|\d{6,8})\b/g
     let m: RegExpExecArray | null
     while ((m = re.exec(body)) !== null) {
-      const code = cleanCode(m[1]!)
-      if (code.length >= 6 && passesFilters(body, m.index, m[1]!, code)) {
+      const code = cleanCode(m[1])
+      if (code.length >= 6 && passesFilters(body, m.index, m[1], code)) {
         return { code, confidence: 0.7 }
       }
     }
@@ -172,8 +172,8 @@ export function extractVerification(
     const re = /\b(\d{4,5})\b/g
     let m: RegExpExecArray | null
     while ((m = re.exec(body)) !== null) {
-      const code = m[1]!
-      if (passesFilters(body, m.index, m[1]!, code)) {
+      const code = m[1]
+      if (passesFilters(body, m.index, m[1], code)) {
         return { code, confidence: 0.55 }
       }
     }

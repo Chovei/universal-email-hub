@@ -1,4 +1,5 @@
-import { ipcMain, BrowserWindow } from 'electron'
+import type { BrowserWindow } from 'electron';
+import { ipcMain } from 'electron'
 import { IPC } from '@shared/constants/ipc-channels'
 import { getFoldersByAccount } from '../../db/queries/folders'
 import type { FolderRow } from '@shared/types/db'

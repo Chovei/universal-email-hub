@@ -1,5 +1,6 @@
 import { autoUpdater } from 'electron-updater'
-import { BrowserWindow, app } from 'electron'
+import type { BrowserWindow} from 'electron';
+import { app } from 'electron'
 import { IPC } from '@shared/constants/ipc-channels'
 import type { UpdateStatus } from '@shared/types/ipc'
 import { logger } from '../logger/Logger'

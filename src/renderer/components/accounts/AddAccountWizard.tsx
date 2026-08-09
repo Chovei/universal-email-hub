@@ -297,7 +297,7 @@ function OAuthConnectingStep({
     const cleanups: Array<() => void> = []
 
     async function run(): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       type Env<T> = { data?: T; error?: { code: string; message: string } }
 
       const oRes = await (
@@ -346,7 +346,7 @@ function OAuthConnectingStep({
       cancelled = true
       cleanups.forEach((fn) => fn())
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [])
 
   const isDone = phase === 'done'
@@ -446,7 +446,7 @@ function ConnectingStep({
     const cleanups: Array<() => void> = []
 
     async function run(): Promise<void> {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       type Env<T> = { data?: T; error?: { code: string; message: string } }
 
       const creds = {

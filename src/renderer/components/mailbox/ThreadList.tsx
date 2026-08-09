@@ -171,7 +171,7 @@ export function ThreadList({ className, onFolderAction }: ThreadListProps) {
         <div ref={parentRef} className="flex-1 overflow-y-auto">
           <div style={{ height: `${virtualizer.getTotalSize()}px`, position: 'relative' }}>
             {virtualizer.getVirtualItems().map((virtualItem) => {
-              const thread = threads[virtualItem.index]!
+              const thread = threads[virtualItem.index]
               return (
                 <div
                   key={virtualItem.key}

@@ -53,10 +53,6 @@ export function normalizeMessage(
   const messageId = ulid()
   const threadId = existingThreadId ?? ulid()
 
-  const fromDisplay = raw.from.name
-    ? `${raw.from.name} <${raw.from.address}>`
-    : raw.from.address
-
   const snippet = stripHtml(raw.bodyText || raw.bodyHtml || '').slice(0, 200)
 
   const thread: Omit<ThreadRow, 'messageCount' | 'unreadCount'> = {

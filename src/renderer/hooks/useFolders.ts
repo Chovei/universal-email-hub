@@ -20,7 +20,7 @@ export function useFolders(accountId: string | null) {
 
   useEffect(() => {
     const unsub = window.emailAPI.folders.onUnreadChanged((payload) => {
-      const { folderId, count, accountId: aid } = payload as { folderId: string; count: number; accountId: string }
+      const { folderId, count, accountId: aid } = payload
       updateUnreadCount(folderId, count, 0)
       void queryClient.invalidateQueries({ queryKey: ['folders', aid] })
     })

@@ -10,11 +10,16 @@ export function initLogger(): void {
 
   log.transports.console.level = app.isPackaged ? false : 'debug'
 
+  // Route the console through electron-log so every existing console.* call
+  // across the app lands in the log file. This is the one place that is
+  // supposed to touch these methods.
+  /* eslint-disable no-console */
   console.log = log.log.bind(log)
   console.info = log.info.bind(log)
   console.warn = log.warn.bind(log)
   console.error = log.error.bind(log)
   console.debug = log.debug.bind(log)
+  /* eslint-enable no-console */
 
   log.info('[logger] v' + app.getVersion() + ' started. Log:', log.transports.file.getFile().path)
 }

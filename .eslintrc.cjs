@@ -29,6 +29,11 @@ module.exports = {
     'react-hooks/rules-of-hooks': 'error',
     'react-hooks/exhaustive-deps': 'warn',
     'no-console': ['warn', { allow: ['warn', 'error'] }],
+    // Every ipcMain.handle callback is declared async so the whole IPC layer
+    // reads the same way and any handler can start awaiting without changing
+    // its signature. ipcMain.handle resolves the return value either way, so
+    // flagging the ones that happen not to await today is noise.
+    '@typescript-eslint/require-await': 'off',
   },
   ignorePatterns: ['out/', 'dist/', 'node_modules/', '*.cjs'],
 }

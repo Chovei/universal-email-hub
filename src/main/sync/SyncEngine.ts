@@ -12,6 +12,7 @@ import { describeSyncError } from './syncErrors'
 import { computeBackoffMs } from './backoff'
 import { IdleWatcher } from './IdleWatcher'
 import { Semaphore } from './semaphore'
+import { logger } from '../logger/Logger'
 
 // Cap concurrent account syncs: with many accounts, an unbounded sync storm
 // saturates network, DB, and provider rate limits simultaneously
@@ -124,8 +125,8 @@ function toThreadRow(t: ThreadSelect): ThreadRow {
     messageCount: t.messageCount,
     isStarred: Boolean(t.isStarred),
     hasAttachment: Boolean(t.hasAttachment),
-    labels: JSON.parse(t.labels as string) as string[],
-    participantAddresses: JSON.parse(t.participantAddresses as string) as ParticipantAddress[],
+    labels: JSON.parse(t.labels) as string[],
+    participantAddresses: JSON.parse(t.participantAddresses) as ParticipantAddress[],
   }
 }
 
@@ -480,7 +481,7 @@ export class SyncEngine {
 
       for (let i = 0; i < sorted.length; i++) {
         const folder = sorted[i]
-        const cursor = (folder.syncCursor as string | null) ?? null
+        const cursor = (folder.syncCursor) ?? null
 
         const result = await worker.provider
           .syncFolder(folder.remoteId, cursor)
@@ -593,13 +594,13 @@ export class SyncEngine {
       // it found something.
       const label = getAccountById(accountId)?.email ?? accountId
       if (trigger !== 'fast') {
-        console.info(
+        logger.info(
           `[SyncEngine] ${label}: ${sorted.length} folders, ${fetchedTotal} message(s) fetched, ` +
             `${folderFailures} folder error(s), ${Date.now() - syncStart}ms` +
             (anomalies.length > 0 ? ` | EMPTY: ${anomalies.slice(0, 4).join('; ')}` : '')
         )
       } else if (fetchedTotal > 0) {
-        console.info(
+        logger.info(
           `[SyncEngine] ${label}: fast poll picked up ${fetchedTotal} message(s) in ${Date.now() - syncStart}ms`
         )
       }
@@ -674,7 +675,7 @@ export class SyncEngine {
       const ghosts = computeGhostRemoteIds(localRemoteIds, uids, count)
       if (ghosts.length === 0) return
 
-      console.info(
+      logger.info(
         `[SyncEngine] Reconciling ${ghosts.length} server-deleted message(s) in folder ${folderRemoteId} (${accountId})`
       )
       // Route through the normal deletion path: threads, counts, and the

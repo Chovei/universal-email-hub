@@ -24,7 +24,7 @@ function getActions(folder: FolderRow): ActionDef[] {
   }
   if (folder.type === 'sent' || folder.type === 'drafts') {
     return [
-      { action: 'markAllRead' as FolderAction, label: 'Mark All Read', icon: <MailOpen className={ICON} /> },
+      { action: 'markAllRead', label: 'Mark All Read', icon: <MailOpen className={ICON} /> },
     ]
   }
   const base: ActionDef[] = [
@@ -108,7 +108,7 @@ export function FolderActionBar({ folder, onAction, onSync }: FolderActionBarPro
         <div className="w-px h-4 bg-[var(--color-border)] mx-1 shrink-0" />
 
         <button
-          onClick={handleSync}
+          onClick={() => void handleSync()}
           title="Sync"
           aria-label="Sync"
           className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)] hover:bg-[var(--color-muted)] transition-colors whitespace-nowrap"

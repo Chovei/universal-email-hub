@@ -21,7 +21,7 @@ function getMigrationsPath(): string {
     path.join(__dirname, 'migrations'),                          // packaged / built
     path.join(app.getAppPath(), 'src', 'main', 'db', 'migrations'), // dev (source)
   ]
-  return candidates.find(fs.existsSync) ?? candidates[0]!
+  return candidates.find(fs.existsSync) ?? candidates[0]
 }
 
 export function initDatabase(): void {

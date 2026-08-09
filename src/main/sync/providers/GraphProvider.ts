@@ -6,7 +6,6 @@ import { getSetting } from '../../settings'
 import { BaseProvider } from './BaseProvider'
 import type {
   OAuthTokens,
-  BasicCredentials,
   ProviderFolder,
   SyncResult,
   RawMessage,
@@ -27,7 +26,7 @@ function tokenKey(accountId: string) {
 
 function getGraphCredentials(): { clientId: string } {
   const clientId =
-    (getSetting('graphClientId') as string) || process.env['GRAPH_CLIENT_ID'] || ''
+    (getSetting('graphClientId')) || process.env['GRAPH_CLIENT_ID'] || ''
   if (!clientId) {
     throw new Error(
       'Microsoft Client ID not configured. ' +

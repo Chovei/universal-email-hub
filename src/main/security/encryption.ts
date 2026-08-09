@@ -28,7 +28,10 @@ export function decrypt(ciphertext: string, key: Buffer): string {
   const decipher = crypto.createDecipheriv(ALGORITHM, key, iv)
   decipher.setAuthTag(tag)
 
-  return decipher.update(encrypted) + decipher.final('utf8')
+  // Decode as UTF-8 on both halves. Without the encoding, update() returns a
+  // Buffer and `Buffer + string` stringifies it independently — a multi-byte
+  // character straddling the update/final boundary would be mangled.
+  return decipher.update(encrypted, undefined, 'utf8') + decipher.final('utf8')
 }
 
 export function deriveKey(secret: string, salt: string): Buffer {

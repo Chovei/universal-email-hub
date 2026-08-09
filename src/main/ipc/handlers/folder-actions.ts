@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { randomUUID } from 'crypto'
 import { IPC } from '@shared/constants/ipc-channels'
 import { BulkActionEngine } from '../../bulk/BulkActionEngine'
-import type { BulkAction, BulkQueryCriteria, FolderAction, FolderExecuteRequest } from '@shared/types/ipc'
+import type { BulkAction, BulkQueryCriteria, FolderExecuteRequest } from '@shared/types/ipc'
 
 const FolderActionSchema = z.enum([
   'emptyTrash', 'emptySpam',
@@ -51,7 +51,7 @@ export function registerFolderActionHandlers(): void {
   ipcMain.handle(IPC.FOLDER_EXECUTE, async (_event, payload: unknown) => {
     try {
       const parsed = FolderExecuteSchema.parse(payload)
-      const req = parsed as FolderExecuteRequest
+      const req = parsed
       const operationId = req.operationId ?? randomUUID()
 
       const { criteria, bulkAction, options } = mapFolderAction(req)

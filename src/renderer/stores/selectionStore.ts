@@ -20,7 +20,8 @@ export const useSelectionStore = create<SelectionState>()((set) => ({
   toggleOne: (id) =>
     set((s) => {
       const next = new Set(s.selectedIds)
-      next.has(id) ? next.delete(id) : next.add(id)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return { selectedIds: next, anchorId: id }
     }),
 

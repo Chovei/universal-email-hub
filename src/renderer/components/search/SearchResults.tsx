@@ -4,7 +4,7 @@ import { Mail, Loader2 } from 'lucide-react'
 import { useSearchStore } from '../../stores/searchStore'
 import { useMailboxStore } from '../../stores/mailboxStore'
 import { useUIStore } from '../../stores/uiStore'
-import { cn, formatDate } from '../../lib/utils'
+import { formatDate } from '../../lib/utils'
 import type { SearchResult } from '@shared/types/db'
 
 // H6: Must match SNIPPET_OPEN / SNIPPET_CLOSE in src/main/db/queries/search.ts
@@ -84,7 +84,7 @@ export function SearchResults() {
         className="relative"
       >
         {virtualizer.getVirtualItems().map((vItem) => {
-          const result = results[vItem.index]!
+          const result = results[vItem.index]
           return (
             <div
               key={vItem.key}

@@ -49,7 +49,7 @@ export function getInitials(name: string | null | undefined, email: string): str
   if (name) {
     const parts = name.trim().split(/\s+/)
     if (parts.length >= 2) {
-      return `${parts[0]![0]}${parts[1]![0]}`.toUpperCase()
+      return `${parts[0][0]}${parts[1][0]}`.toUpperCase()
     }
     return name.slice(0, 2).toUpperCase()
   }
@@ -66,7 +66,7 @@ export function getAvatarColor(email: string): string {
   for (let i = 0; i < email.length; i++) {
     hash = ((hash << 5) - hash + email.charCodeAt(i)) | 0
   }
-  return colors[Math.abs(hash) % colors.length]!
+  return colors[Math.abs(hash) % colors.length]
 }
 
 export function formatBytes(bytes: number): string {

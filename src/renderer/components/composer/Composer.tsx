@@ -1,12 +1,11 @@
-import { useEffect, useCallback } from 'react'
+import { useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Minimize2, Send, Trash2, Paperclip, ChevronDown } from 'lucide-react'
+import { X, Minimize2, Send, Trash2, Paperclip } from 'lucide-react'
 import { useEditor, EditorContent } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import Link from '@tiptap/extension-link'
 import Underline from '@tiptap/extension-underline'
-import { useUIStore } from '../../stores/uiStore'
 import { useComposeStore, type DraftState } from '../../stores/composeStore'
 import { useAccountStore } from '../../stores/accountStore'
 import { cn } from '../../lib/utils'
@@ -195,7 +194,7 @@ function ComposerWindow({ draft }: { draft: DraftState }) {
           <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--color-border)] shrink-0 bg-[var(--color-muted)]">
             <div className="flex items-center gap-1">
               <button
-                onClick={handleAttachment}
+                onClick={() => void handleAttachment()}
                 className="p-1.5 rounded-[var(--radius-md)] hover:bg-[var(--color-border)] transition-colors text-[var(--color-muted-foreground)]"
                 title="Attach file"
               >

@@ -1,4 +1,4 @@
-import type { MessageRow, ThreadRow } from './db'
+import type { MessageRow } from './db'
 
 // ── Plugin manifest ────────────────────────────────────────────────────────
 

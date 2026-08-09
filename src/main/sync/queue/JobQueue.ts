@@ -1,5 +1,4 @@
 import { getRawSqlite } from '../../db/client'
-import { syncJobs } from '../../db/schema'
 import type { SyncJob, QueuedJob } from './types'
 import type { SyncJobType } from '@shared/types/db'
 
@@ -42,7 +41,7 @@ export class JobQueue {
       folderId: r['folder_id'] as string | undefined,
       type: r['type'] as SyncJobType,
       priority: r['priority'] as number,
-      payload: r['payload'] ? JSON.parse(r['payload'] as string) : undefined,
+      payload: r['payload'] ? (JSON.parse(r['payload'] as string) as SyncJob['payload']) : undefined,
       status: r['status'] as QueuedJob['status'],
       attempts: r['attempts'] as number,
       lastError: r['last_error'] as string | undefined,

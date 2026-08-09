@@ -1,6 +1,7 @@
 import { ImapFlow } from 'imapflow'
 import type { ListTreeResponse, FetchMessageObject } from 'imapflow'
 import { simpleParser } from 'mailparser'
+import type { AddressObject as MailparserAddress } from 'mailparser'
 import nodemailer from 'nodemailer'
 import { credentialStore } from '../../security/keychain'
 import { BaseProvider } from './BaseProvider'
@@ -42,6 +43,22 @@ function loadImapCredentials(accountId: string): BasicCredentials {
 /** How many recently-synced messages to re-check flags for each cycle. */
 const FLAG_WINDOW = 500
 
+/**
+ * Header values arrive as strings, Dates, or structured objects depending on
+ * the header. String() on an object gives "[object Object]" and throws the
+ * real value away, so preserve something meaningful instead.
+ */
+function headerValueToString(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (value instanceof Date) return value.toISOString()
+  if (value === null || value === undefined) return ''
+  try {
+    return JSON.stringify(value) ?? ''
+  } catch {
+    return ''
+  }
+}
+
 // ── Address helpers ────────────────────────────────────────────────────────
 
 function toAddressObjects(
@@ -50,7 +67,7 @@ function toAddressObjects(
   if (!addrs) return []
   return addrs
     .filter((a): a is { name?: string; address: string } => !!a.address)
-    .map((a) => ({ name: a.name ?? undefined, address: a.address! }))
+    .map((a) => ({ name: a.name ?? undefined, address: a.address }))
 }
 
 // ── ImapProvider ──────────────────────────────────────────────────────────
@@ -162,7 +179,7 @@ export class ImapProvider extends BaseProvider {
     return this._credentials
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+   
   async refreshTokens(_current: OAuthTokens): Promise<OAuthTokens> {
     throw new Error('IMAP does not use OAuth tokens')
   }
@@ -299,7 +316,9 @@ export class ImapProvider extends BaseProvider {
     client: ImapFlow,
     folderId: string,
     uidValidity: number,
-    uidNext: number
+    // Kept for call-site symmetry with doIncrementalSync; the cursor now
+    // always advances to what actually parsed, never to uidNext - 1.
+    _uidNext: number
   ): Promise<SyncResult> {
     const messages: RawMessage[] = []
     const status = await client.status(folderId, { messages: true })
@@ -514,8 +533,13 @@ export class ImapProvider extends BaseProvider {
       const isDraft = flags.has('\\Draft')
 
       const remoteId = String(msg.uid ?? msg.seq)
+      // mailparser hands back structured objects for some headers. Blindly
+      // stringifying one yields "[object Object]", which every such message
+      // would then share as its thread key — collapsing unrelated mail into
+      // a single conversation. Only accept a real string.
+      const threadIndex = parsed.headers.get('thread-index')
       const threadRemoteId =
-        parsed.headers.get('thread-index')?.toString() ??
+        (typeof threadIndex === 'string' ? threadIndex : null) ??
         parsed.messageId?.replace(/^<|>$/g, '') ??
         remoteId
 
@@ -532,9 +556,8 @@ export class ImapProvider extends BaseProvider {
         .filter((f) => !f.startsWith('\\'))
         .map((f) => f.replace(/^\$/, ''))
 
-      const normalizeAddr = (
-        field: import('mailparser').AddressObject | import('mailparser').AddressObject[] | undefined
-      ) => (Array.isArray(field) ? field[0] : field)
+      const normalizeAddr = (field: MailparserAddress | MailparserAddress[] | undefined) =>
+        Array.isArray(field) ? field[0] : field
 
       const refs = parsed.references
       const refsArray: string[] = Array.isArray(refs) ? refs : refs ? [refs] : []
@@ -558,7 +581,7 @@ export class ImapProvider extends BaseProvider {
         labels,
         attachments,
         headers: Object.fromEntries(
-          [...parsed.headers.entries()].map(([k, v]) => [k, String(v)])
+          [...parsed.headers.entries()].map(([k, v]) => [k, headerValueToString(v)])
         ),
         sizeBytes: msg.size ?? 0,
         inReplyTo: parsed.inReplyTo?.replace(/^<|>$/g, '') ?? undefined,
@@ -635,7 +658,7 @@ export class ImapProvider extends BaseProvider {
   async sendMessage(draft: Draft): Promise<{ remoteId: string }> {
     const transport = this.makeTransport()
 
-    const info = await transport.sendMail({
+    const info = (await transport.sendMail({
       from: `"${draft.to[0]?.name ?? ''}" <${this._credentials.username}>`,
       to: draft.to.map((a) => (a.name ? `"${a.name}" <${a.address}>` : a.address)).join(', '),
       cc: draft.cc?.map((a) => a.address).join(', '),
@@ -645,7 +668,7 @@ export class ImapProvider extends BaseProvider {
       text: draft.bodyText,
       inReplyTo: draft.inReplyToRemoteId ? `<${draft.inReplyToRemoteId}>` : undefined,
       references: draft.inReplyToRemoteId ? `<${draft.inReplyToRemoteId}>` : undefined,
-    })
+    })) as { messageId?: string }
 
     return { remoteId: info.messageId ?? `sent_${Date.now()}` }
   }

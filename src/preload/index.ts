@@ -1,4 +1,5 @@
-import { contextBridge, ipcRenderer, IpcRendererEvent } from 'electron'
+import type { IpcRendererEvent } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron'
 import { IPC } from '../shared/constants/ipc-channels'
 import type { EmailAPI } from '../shared/types/ipc'
 

@@ -30,7 +30,7 @@ export function registerPluginHandlers(): void {
     }
   })
 
-  ipcMain.handle(IPC.PLUGINS_SEND, async (_event, pluginId: string, message: unknown) => {
+  ipcMain.handle(IPC.PLUGINS_SEND, async (_event, _pluginId: string, _message: unknown) => {
     try {
       return { data: null }
     } catch (err) {

@@ -25,7 +25,7 @@ export function MessageBubble({
   onReply,
   onForward,
   onStar,
-  onDelete,
+  onDelete: _onDelete,
 }: MessageBubbleProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null)
   const [iframeHeight, setIframeHeight] = useState(200)
@@ -251,7 +251,7 @@ function AttachmentChip({ attachment }: { attachment: AttachmentRow }) {
 
   return (
     <div className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-card)] hover:bg-[var(--color-muted)] transition-colors group cursor-pointer"
-      onClick={handleOpen}
+      onClick={() => void handleOpen()}
     >
       <div className="shrink-0">
         <Paperclip className="w-3.5 h-3.5 text-[var(--color-muted-foreground)]" />

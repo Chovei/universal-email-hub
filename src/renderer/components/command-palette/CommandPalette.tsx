@@ -2,7 +2,7 @@ import { useEffect, useCallback } from 'react'
 import { Command } from 'cmdk'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Search, Inbox, Send, FileText, Trash2, Settings, Plus,
+  Search, Send, FileText, Settings, Plus,
   Star, Archive, RefreshCw, Mail, Layers, Keyboard,
 } from 'lucide-react'
 import { useUIStore } from '../../stores/uiStore'

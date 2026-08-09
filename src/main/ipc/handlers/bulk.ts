@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { randomUUID } from 'crypto'
 import { IPC } from '@shared/constants/ipc-channels'
 import { BulkActionEngine } from '../../bulk/BulkActionEngine'
-import type { BulkRequest, BulkQueryCriteria } from '@shared/types/ipc'
+import type { BulkRequest, BulkResult } from '@shared/types/ipc'
 
 const BulkActionEnum = z.enum([
   'delete', 'archive', 'move',
@@ -49,7 +49,7 @@ export function registerBulkHandlers(): void {
       engine.execute(req).catch((err: unknown) => {
         // If execute() itself throws (e.g. DB down before first batch), no BULK_DONE
         // event will ever arrive — push a terminal failure so the renderer exits loading
-        const failResult: import('@shared/types/ipc').BulkResult = {
+        const failResult: BulkResult = {
           operationId,
           action: req.action,
           succeeded: 0,
@@ -88,7 +88,7 @@ export function registerBulkHandlers(): void {
 
   ipcMain.handle(IPC.BULK_QUERY_IDS, async (_event, payload: unknown) => {
     try {
-      const criteria = BulkQuerySchema.parse(payload) as BulkQueryCriteria
+      const criteria = BulkQuerySchema.parse(payload)
       const ids = engine.queryIds(criteria)
       return { data: ids }
     } catch (err) {

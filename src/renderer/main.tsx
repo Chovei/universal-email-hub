@@ -18,7 +18,7 @@ const queryClient = new QueryClient({
 // H2: Wire the badge-count push (main → renderer) to the sync store so the
 //     sidebar unread badge shows the real count.
 window.emailAPI.window.onBadgeCount((count) => {
-  useSyncStore.getState().setTotalUnread(count as number)
+  useSyncStore.getState().setTotalUnread(count)
 })
 
 // H1: Removed duplicate onSyncStatusChanged subscription that was here via

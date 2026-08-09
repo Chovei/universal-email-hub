@@ -183,7 +183,7 @@ export function registerAccountHandlers(): void {
         const now = Date.now()
         const row = insertAccount({
           id,
-          provider: 'gmail' as ProviderKind,
+          provider: 'gmail',
           email: profile.email,
           displayName: profile.name,
           avatarUrl: profile.picture ?? null,
@@ -217,7 +217,7 @@ export function registerAccountHandlers(): void {
         const now = Date.now()
         const row = insertAccount({
           id,
-          provider: 'graph' as ProviderKind,
+          provider: 'graph',
           email: profile.email,
           displayName: profile.name,
           avatarUrl: null,

@@ -173,7 +173,8 @@ export function Sidebar({ onAddAccount, onFolderAction }: SidebarProps) {
   const toggleGroup = (label: string) =>
     setCollapsedGroups((prev) => {
       const next = new Set(prev)
-      next.has(label) ? next.delete(label) : next.add(label)
+      if (next.has(label)) next.delete(label)
+      else next.add(label)
       return next
     })
 

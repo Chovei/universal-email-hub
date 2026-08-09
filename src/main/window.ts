@@ -1,4 +1,4 @@
-import { BrowserWindow, app, nativeImage, nativeTheme, shell } from 'electron'
+import { BrowserWindow, app, nativeTheme, shell } from 'electron'
 import path from 'path'
 
 let mainWindow: BrowserWindow | null = null

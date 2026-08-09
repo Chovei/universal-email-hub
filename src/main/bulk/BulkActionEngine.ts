@@ -84,7 +84,7 @@ export class BulkActionEngine {
         return result
       }
 
-      const batch = batches[batchIdx]!
+      const batch = batches[batchIdx]
       try {
         this.executeBatch(action, batch, req.options ?? {}, pendingUndo)
         completed += batch.length

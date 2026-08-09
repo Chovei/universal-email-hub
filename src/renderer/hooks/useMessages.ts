@@ -10,7 +10,7 @@ export function useMessages(payload: Omit<ListMessagesPayload, 'cursor'>) {
     queryFn: async ({ pageParam }) => {
       const result = await window.emailAPI.messages.list({
         ...payload,
-        cursor: pageParam as string | undefined,
+        cursor: pageParam,
       })
       return (result as { data?: ListMessagesResult }).data ?? { threads: [], cursor: null, hasMore: false }
     },

@@ -11,7 +11,7 @@ interface SyncStore {
   setTotalUnread: (count: number) => void
 }
 
-export const useSyncStore = create<SyncStore>()((set, get) => ({
+export const useSyncStore = create<SyncStore>()((set) => ({
   syncStatus: {},
   unreadCounts: {},
   totalUnread: 0,

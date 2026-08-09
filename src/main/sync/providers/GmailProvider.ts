@@ -61,11 +61,11 @@ const appStore = new Store<{ gmailClientId?: string; gmailClientSecret?: string 
 
 export function getGmailOAuthCredentials(): { clientId: string; clientSecret: string } {
   const clientId =
-    (appStore.get('gmailClientId') as string | undefined) ||
+    (appStore.get('gmailClientId')) ||
     process.env.GMAIL_CLIENT_ID ||
     ''
   const clientSecret =
-    (appStore.get('gmailClientSecret') as string | undefined) ||
+    (appStore.get('gmailClientSecret')) ||
     process.env.GMAIL_CLIENT_SECRET ||
     ''
   if (!clientId || !clientSecret) {
@@ -273,7 +273,7 @@ export class GmailProvider extends BaseProvider {
 
   private makeClient(redirectUri?: string): OAuth2Client {
     const { clientId, clientSecret } = getGmailOAuthCredentials()
-    return new google.auth.OAuth2(clientId, clientSecret, redirectUri) as OAuth2Client
+    return new google.auth.OAuth2(clientId, clientSecret, redirectUri)
   }
 
   private storeTokens(tokens: OAuthTokens): void {
@@ -664,7 +664,7 @@ export class GmailProvider extends BaseProvider {
     const results = await Promise.allSettled(promises)
     const failures = results.filter((r): r is PromiseRejectedResult => r.status === 'rejected')
     if (failures.length > 0) {
-      const first = failures[0].reason
+      const first: unknown = failures[0].reason
       const detail = first instanceof Error ? first.message : String(first)
       throw new Error(
         `Gmail ${operation}: ${failures.length}/${results.length} message(s) failed — first error: ${detail}`

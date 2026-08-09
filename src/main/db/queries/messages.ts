@@ -57,7 +57,7 @@ export function getMessagesByThreadIds(threadIds: string[]): MessageSummary[] {
     })
     .from(messages)
     .where(inArray(messages.threadId, threadIds))
-    .all() as MessageSummary[]
+    .all()
 }
 
 /**

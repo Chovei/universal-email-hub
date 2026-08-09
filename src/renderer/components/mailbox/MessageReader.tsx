@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, Archive, Trash2, Star, MoreHorizontal, ChevronLeft, RefreshCw, Mail } from 'lucide-react'
+import { Archive, Trash2, Star, ChevronLeft, Mail } from 'lucide-react'
 import { MessageBubble } from './MessageBubble'
 import { MessageSkeleton } from '../ui/Skeleton'
 import { cn } from '../../lib/utils'
 import { useThread } from '../../hooks/useThread'
 import { useMailboxStore } from '../../stores/mailboxStore'
 import { useComposeStore } from '../../stores/composeStore'
-import type { MessageRow, AttachmentRow } from '@shared/types/db'
 
 export function MessageReader() {
   const { selectedThreadId, closeThreadPanel } = useMailboxStore()
@@ -20,7 +19,7 @@ export function MessageReader() {
   // Auto-expand latest message and mark as read
   useEffect(() => {
     if (messages.length > 0) {
-      const last = messages[0]! // newest first
+      const last = messages[0] // newest first
       setExpandedIds(new Set([last.id]))
 
       const unreadIds = messages.filter((m) => !m.isRead).map((m) => m.id)

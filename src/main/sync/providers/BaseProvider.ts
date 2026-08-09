@@ -45,7 +45,9 @@ export abstract class BaseProvider implements IEmailProvider {
         }
       }
     }
-    throw lastError
+    // retries <= 0 leaves lastError null; throwing null loses the stack and
+    // defeats every `instanceof Error` check downstream.
+    throw lastError ?? new Error('Operation failed before any attempt was made')
   }
 
   protected sleep(ms: number): Promise<void> {

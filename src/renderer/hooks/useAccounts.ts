@@ -25,7 +25,7 @@ export function useAccounts() {
   // Subscribe to sync status changes
   useEffect(() => {
     const unsub = window.emailAPI.accounts.onSyncStatusChanged((payload) => {
-      const { accountId, status } = payload as { accountId: string; status: Parameters<typeof updateSyncStatus>[1] }
+      const { accountId, status } = payload
       updateSyncStatus(accountId, status)
     })
     return unsub
