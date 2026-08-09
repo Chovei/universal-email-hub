@@ -1,10 +1,11 @@
 import { useState, useCallback, useMemo } from 'react'
 import { useHotkeys } from 'react-hotkeys-hook'
-import { ShieldCheck, Copy, Check, Trash2, Clock, Mail, Search } from 'lucide-react'
+import { ShieldCheck, Copy, Check, Trash2, Clock, Mail, Search, Inbox } from 'lucide-react'
 import { cn } from '../../lib/utils'
 import { useVerificationCodes } from '../../hooks/useVerificationCodes'
 import { useMailboxStore } from '../../stores/mailboxStore'
 import { useUIStore } from '../../stores/uiStore'
+import { useAccountStore } from '../../stores/accountStore'
 import type { VerificationCodeRow, MessageRow } from '@shared/types/db'
 
 function timeAgo(ts: number): string {
@@ -54,11 +55,14 @@ function serviceColor(name: string): string {
 
 function CodeCard({
   code,
+  accountEmail,
   onDelete,
   onMarkRead,
   onOpenEmail,
 }: {
   code: VerificationCodeRow
+  /** Which of the user's inboxes received this code. */
+  accountEmail: string | null
   onDelete: (id: string) => void
   onMarkRead: (id: string) => void
   onOpenEmail: (code: VerificationCodeRow) => void
@@ -144,9 +148,22 @@ function CodeCard({
 
       {/* Footer row */}
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-[var(--color-muted-foreground)] truncate min-w-0">
-          {code.senderEmail}
-        </span>
+        <div className="flex flex-col min-w-0 gap-0.5">
+          {/* Which inbox received it — the thing you need when the same
+              service is registered against several of your accounts. */}
+          {accountEmail && (
+            <span
+              className="flex items-center gap-1.5 text-xs font-medium text-[var(--color-foreground)] truncate"
+              title={`Delivered to ${accountEmail}`}
+            >
+              <Inbox className="w-3 h-3 shrink-0 text-[var(--color-muted-foreground)]" />
+              {accountEmail}
+            </span>
+          )}
+          <span className="text-[11px] text-[var(--color-muted-foreground)] truncate">
+            from {code.senderEmail}
+          </span>
+        </div>
         <div className="flex items-center gap-1 shrink-0">
           <button
             onClick={() => onOpenEmail(code)}
@@ -174,6 +191,12 @@ export function VerificationCenter() {
   const [filter, setFilter] = useState('')
   const selectThread = useMailboxStore((s) => s.selectThread)
   const setActivePanel = useUIStore((s) => s.setActivePanel)
+  const accounts = useAccountStore((s) => s.accounts)
+
+  const accountEmailById = useMemo(
+    () => new Map(accounts.map((a) => [a.id, a.email])),
+    [accounts]
+  )
 
   const visibleCodes = useMemo(() => {
     const q = filter.trim().toLowerCase()
@@ -182,9 +205,11 @@ export function VerificationCenter() {
       (c) =>
         c.serviceName.toLowerCase().includes(q) ||
         c.senderEmail.toLowerCase().includes(q) ||
-        c.code.toLowerCase().includes(q)
+        c.code.toLowerCase().includes(q) ||
+        // Searchable by receiving inbox too: "which code came to this account?"
+        (accountEmailById.get(c.accountId) ?? '').toLowerCase().includes(q)
     )
-  }, [codes, filter])
+  }, [codes, filter, accountEmailById])
 
   const handleDelete = useCallback(
     async (id: string) => {
@@ -302,6 +327,7 @@ export function VerificationCenter() {
               <CodeCard
                 key={code.id}
                 code={code}
+                accountEmail={accountEmailById.get(code.accountId) ?? null}
                 onDelete={(id) => { void handleDelete(id) }}
                 onMarkRead={(id) => { void handleMarkRead(id) }}
                 onOpenEmail={(c) => { void handleOpenEmail(c) }}
