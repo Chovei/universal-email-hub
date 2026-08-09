@@ -6,6 +6,12 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.30] - 2026-08-09
+
+### ✨ Improvements
+
+- **Import accounts from Google Authenticator.** Use its "Transfer accounts" export and paste the resulting link into Email Hub to add every account at once. Your phone keeps working exactly as before — the same key can live on several devices and they all show the same code
+
 ## [0.1.29] - 2026-08-09
 
 ### 🐛 Fixes
@@ -273,7 +279,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.29...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.30...HEAD
+[0.1.30]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.29...v0.1.30
 [0.1.29]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.28...v0.1.29
 [0.1.28]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.27...v0.1.28
 [0.1.27]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.26...v0.1.27
