@@ -6,6 +6,14 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.32] - 2026-08-09
+
+### ✨ Improvements
+
+- **Authenticator codes take a third of the room.** Each one is now a single compact row instead of a tall card, so a screen that fitted two now fits eight
+- **Emailed codes stay where you can reach them.** Past five authenticators the list scrolls within itself, so the “Codes received by email” section starts in the same place whether you hold five authenticators or fifty — importing a big Google Authenticator export no longer pushes your emailed codes off the bottom of the page
+- **Find an authenticator by name** once you have more than a handful, and the section header now shows how many you have
+
 ## [0.1.31] - 2026-08-09
 
 ### ✨ Improvements
@@ -298,7 +306,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.31...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.32...HEAD
+[0.1.32]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.31...v0.1.32
 [0.1.31]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.30...v0.1.31
 [0.1.30]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.29...v0.1.30
 [0.1.29]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.28...v0.1.29
