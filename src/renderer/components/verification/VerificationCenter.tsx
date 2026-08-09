@@ -6,6 +6,7 @@ import { useVerificationCodes } from '../../hooks/useVerificationCodes'
 import { useMailboxStore } from '../../stores/mailboxStore'
 import { useUIStore } from '../../stores/uiStore'
 import { useAccountStore } from '../../stores/accountStore'
+import { AuthenticatorSection } from './AuthenticatorSection'
 import type { VerificationCodeRow, MessageRow } from '@shared/types/db'
 
 function timeAgo(ts: number): string {
@@ -302,6 +303,19 @@ export function VerificationCenter() {
 
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-6 py-5">
+        {/* Authenticator codes are computed here, not received — kept in their
+            own titled section so they are never mistaken for an email. */}
+        <div className="max-w-2xl mb-6">
+          <AuthenticatorSection />
+        </div>
+
+        <div className="max-w-2xl mb-3 flex items-center gap-2">
+          <Mail className="w-3.5 h-3.5 text-[var(--color-muted-foreground)]" />
+          <h2 className="text-sm font-semibold text-[var(--color-foreground)]">
+            Codes received by email
+          </h2>
+        </div>
+
         {isLoading ? (
           <div className="flex items-center justify-center h-48 text-[var(--color-muted-foreground)]">
             <span className="text-sm">Loading...</span>
