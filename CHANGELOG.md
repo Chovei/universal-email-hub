@@ -6,6 +6,14 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.27] - 2026-08-09
+
+### 🐛 Fixes
+
+- Fixed unrelated emails sometimes being grouped together into a single conversation
+- Fixed accented and non-English characters being corrupted when decrypting stored data
+- Internal code-quality cleanup so the automated checks pass again
+
 ## [0.1.26] - 2026-08-09
 
 ### ✨ Improvements
@@ -249,7 +257,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.26...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.27...HEAD
+[0.1.27]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.26...v0.1.27
 [0.1.26]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.25...v0.1.26
 [0.1.25]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.24...v0.1.25
 [0.1.24]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.23...v0.1.24
