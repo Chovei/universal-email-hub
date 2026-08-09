@@ -65,6 +65,24 @@ export const credentialStore = {
     }
   },
 
+  /**
+   * Store several credentials in one write.
+   *
+   * electron-store persists the whole file on every set, so importing fifty
+   * authenticators one at a time means fifty rewrites of a file that grows as
+   * it goes. It also narrows the window in which a crash could leave some of
+   * a batch written and the rest not.
+   */
+  setMany(entries: Record<string, string>): void {
+    const encoded: Record<string, string> = {}
+    for (const [key, value] of Object.entries(entries)) {
+      encoded[key] = isAvailable()
+        ? safeStorage.encryptString(value).toString('base64')
+        : Buffer.from(value).toString('base64')
+    }
+    store.set(encoded)
+  },
+
   get(key: string): string | null {
     const stored = store.get(key) as string | undefined
     if (!stored) return null

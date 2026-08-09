@@ -1,4 +1,9 @@
-import { encodeBase32, type TotpAlgorithm, TotpError, type ProvisioningData } from './totp'
+import {
+  encodeBase32,
+  MIN_SECRET_BYTES,
+  TotpError,
+  type TotpAlgorithm,
+} from './totp'
 
 /**
  * Decoder for Google Authenticator's "Transfer accounts" export.
@@ -24,10 +29,17 @@ import { encodeBase32, type TotpAlgorithm, TotpError, type ProvisioningData } fr
  *   Algorithm algorithm = 4; DigitCount digits = 5;
  *   OtpType type = 6; int64 counter = 7;
  * }
+ *
+ * Nothing here logs, and nothing here returns the payload itself: callers get
+ * decoded entries, and the only place those are held is the main process.
  */
 
 const WIRE_VARINT = 0
+const WIRE_FIXED64 = 1
 const WIRE_LENGTH_DELIMITED = 2
+const WIRE_START_GROUP = 3
+const WIRE_END_GROUP = 4
+const WIRE_FIXED32 = 5
 
 // Enum values as defined by Google Authenticator's schema.
 const ALGORITHM_BY_VALUE: Record<number, TotpAlgorithm> = {
@@ -39,7 +51,9 @@ const ALGORITHM_BY_VALUE: Record<number, TotpAlgorithm> = {
 }
 const DIGITS_BY_VALUE: Record<number, number> = { 0: 6, 1: 6, 2: 8 }
 const OTP_TYPE_HOTP = 1
-const OTP_TYPE_TOTP = 2
+
+/** The export carries no period field; every entry in one is a 30s account. */
+const EXPORT_PERIOD = 30
 
 class Reader {
   private offset = 0
@@ -56,17 +70,20 @@ class Reader {
       if (this.done) throw new TotpError('Export data ended unexpectedly')
       const byte = this.buf[this.offset++]
       // Beyond 2^53 a JS number stops being exact; nothing in this schema
-      // legitimately gets near that.
+      // legitimately gets near that, and an imprecise batch number simply
+      // fails to match a known enum rather than corrupting the stream.
       result += (byte & 0x7f) * 2 ** shift
       if ((byte & 0x80) === 0) return result
       shift += 7
-      if (shift > 56) throw new TotpError('Export data is malformed')
+      // Ten bytes is protobuf's maximum: a negative int32 is encoded as a
+      // full 64-bit varint, so stopping earlier would reject valid data.
+      if (shift > 63) throw new TotpError('Export data is malformed')
     }
   }
 
   bytes(): Buffer {
     const length = this.varint()
-    if (this.offset + length > this.buf.length) {
+    if (!Number.isSafeInteger(length) || this.offset + length > this.buf.length) {
       throw new TotpError('Export data ended unexpectedly')
     }
     const out = this.buf.subarray(this.offset, this.offset + length)
@@ -74,30 +91,85 @@ class Reader {
     return out
   }
 
-  /** Skip a field whose contents are not needed. */
+  /** Skip a field whose contents are not needed, without running off the end. */
   skip(wireType: number): void {
-    if (wireType === WIRE_VARINT) this.varint()
-    else if (wireType === WIRE_LENGTH_DELIMITED) this.bytes()
-    else if (wireType === 5) this.offset += 4
-    else if (wireType === 1) this.offset += 8
-    else throw new TotpError('Export data uses an unexpected format')
+    if (wireType === WIRE_VARINT) {
+      this.varint()
+      return
+    }
+    if (wireType === WIRE_LENGTH_DELIMITED) {
+      this.bytes()
+      return
+    }
+    const fixed = wireType === WIRE_FIXED32 ? 4 : wireType === WIRE_FIXED64 ? 8 : 0
+    if (fixed === 0 || wireType === WIRE_START_GROUP || wireType === WIRE_END_GROUP) {
+      throw new TotpError('Export data uses an unexpected format')
+    }
+    if (this.offset + fixed > this.buf.length) {
+      throw new TotpError('Export data ended unexpectedly')
+    }
+    this.offset += fixed
   }
 }
 
-export interface MigrationEntry extends ProvisioningData {
-  /** Entries Email Hub cannot use are reported rather than silently dropped. */
-  unsupportedReason?: string
+export interface MigrationEntry {
+  /** Base32 seed, or '' when the entry carried none. */
+  secret: string
+  issuer: string
+  label: string
+  algorithm: TotpAlgorithm
+  digits: number
+  period: number
+  /**
+   * Set when this entry cannot be imported. Entries are always returned, never
+   * dropped: an export that quietly loses an account looks identical to one
+   * that never had it, and the user has no way to notice until the code they
+   * need is missing.
+   */
+  problem?: string
+  /**
+   * 'invalid' — the entry is damaged and nothing can be done with it.
+   * 'unsupported' — the entry is intact but describes something Email Hub
+   * does not generate. The distinction is what the user is told to do next.
+   */
+  problemKind?: 'invalid' | 'unsupported'
 }
 
-function parseOtpParameters(buf: Buffer): MigrationEntry | null {
+export interface MigrationPayload {
+  entries: MigrationEntry[]
+  /**
+   * Google splits large exports across several QR codes. batchIndex is
+   * zero-based; batchSize is how many codes make up the whole export.
+   */
+  batchIndex: number
+  batchSize: number
+  batchId: number
+}
+
+/**
+ * A known field carrying the wrong wire type means the bytes are not the
+ * message we think they are. Reading them anyway is the dangerous case: a
+ * secret field encoded as a varint decodes into a plausible-looking seed that
+ * is simply wrong, and a wrong seed produces codes that never work with no
+ * indication why.
+ */
+function expectWire(actual: number, expected: number): void {
+  if (actual !== expected) throw new TotpError('Export data is malformed')
+}
+
+function parseOtpParameters(buf: Buffer): MigrationEntry {
   const r = new Reader(buf)
   let secretBytes: Buffer | null = null
   let name = ''
   let issuer = ''
   let algorithm: TotpAlgorithm = 'SHA1'
   let digits = 6
-  let type = OTP_TYPE_TOTP
-  let algorithmSupported = true
+  let isHotp = false
+  let problem: string | undefined
+
+  const note = (reason: string): void => {
+    if (!problem) problem = reason
+  }
 
   while (!r.done) {
     const key = r.varint()
@@ -106,66 +178,146 @@ function parseOtpParameters(buf: Buffer): MigrationEntry | null {
 
     switch (field) {
       case 1:
+        expectWire(wireType, WIRE_LENGTH_DELIMITED)
         secretBytes = r.bytes()
         break
       case 2:
+        expectWire(wireType, WIRE_LENGTH_DELIMITED)
         name = r.bytes().toString('utf8')
         break
       case 3:
+        expectWire(wireType, WIRE_LENGTH_DELIMITED)
         issuer = r.bytes().toString('utf8')
         break
       case 4: {
-        const value = r.varint()
-        const mapped = ALGORITHM_BY_VALUE[value]
+        expectWire(wireType, WIRE_VARINT)
+        const mapped = ALGORITHM_BY_VALUE[r.varint()]
         if (mapped) algorithm = mapped
-        else algorithmSupported = false
+        else note('Uses a hashing algorithm Email Hub does not support')
         break
       }
-      case 5:
-        digits = DIGITS_BY_VALUE[r.varint()] ?? 6
+      case 5: {
+        expectWire(wireType, WIRE_VARINT)
+        const mapped = DIGITS_BY_VALUE[r.varint()]
+        if (mapped) digits = mapped
+        else note('Asks for a code length Email Hub does not support')
         break
+      }
       case 6:
-        type = r.varint()
+        expectWire(wireType, WIRE_VARINT)
+        isHotp = r.varint() === OTP_TYPE_HOTP
         break
       default:
         r.skip(wireType)
     }
   }
 
-  if (!secretBytes || secretBytes.length === 0) return null
-
-  // The label often arrives as "Issuer:account"; prefer the explicit field.
+  // The label often arrives as "Issuer:account". Google populates both fields
+  // for most services, so the prefix is stripped whenever it is redundant
+  // rather than only when the issuer field is missing.
   let label = name
-  if (!issuer && name.includes(':')) {
-    issuer = name.slice(0, name.indexOf(':')).trim()
-    label = name.slice(name.indexOf(':') + 1).trim()
+  const colon = name.indexOf(':')
+  if (colon !== -1) {
+    const prefix = name.slice(0, colon).trim()
+    const rest = name.slice(colon + 1).trim()
+    if (!issuer) {
+      issuer = prefix
+      label = rest
+    } else if (prefix.toLowerCase() === issuer.trim().toLowerCase()) {
+      label = rest
+    }
   }
 
   const entry: MigrationEntry = {
-    secret: encodeBase32(secretBytes),
+    secret: secretBytes && secretBytes.length > 0 ? encodeBase32(secretBytes) : '',
     issuer: issuer.trim(),
     label: label.trim() || issuer.trim(),
     algorithm,
     digits,
-    period: 30, // the export carries no period; TOTP entries are always 30s here
+    period: EXPORT_PERIOD,
   }
 
-  if (type === OTP_TYPE_HOTP) {
-    entry.unsupportedReason = 'Counter-based (HOTP) account — Email Hub only supports time-based codes'
-  } else if (!algorithmSupported) {
-    entry.unsupportedReason = 'Uses an algorithm Email Hub does not support'
+  // Most fundamental problem first — an entry with no usable key cannot be
+  // imported whatever else is wrong with it.
+  if (!secretBytes || secretBytes.length === 0) {
+    entry.problem = 'This entry has no key in the export'
+    entry.problemKind = 'invalid'
+  } else if (secretBytes.length < MIN_SECRET_BYTES) {
+    entry.problem = 'The key in this entry is too short to be a real one'
+    entry.problemKind = 'invalid'
+  } else if (isHotp) {
+    entry.problem = 'Counter-based (HOTP) account — Email Hub only supports time-based codes'
+    entry.problemKind = 'unsupported'
+  } else if (problem) {
+    entry.problem = problem
+    entry.problemKind = 'unsupported'
   }
   return entry
 }
 
 /**
+ * Pull the data parameter out by hand.
+ *
+ * URLSearchParams applies application/x-www-form-urlencoded rules, under which
+ * a literal '+' means a space. Standard-alphabet base64 uses '+' as a data
+ * character, and Buffer's base64 decoder skips a space rather than failing —
+ * so going through searchParams shifts every following byte by six bits and
+ * yields wrong secrets with no error anywhere.
+ */
+function extractDataParam(uri: string): string {
+  const withoutFragment = uri.split('#')[0]
+  const q = withoutFragment.indexOf('?')
+  if (q === -1) throw new TotpError('Export link is missing its data')
+
+  for (const part of withoutFragment.slice(q + 1).split('&')) {
+    const eq = part.indexOf('=')
+    if ((eq === -1 ? part : part.slice(0, eq)) !== 'data') continue
+    const raw = eq === -1 ? '' : part.slice(eq + 1)
+    try {
+      return decodeURIComponent(raw)
+    } catch {
+      throw new TotpError('Export link data could not be read')
+    }
+  }
+  throw new TotpError('Export link is missing its data')
+}
+
+/**
+ * Buffer's base64 decoder silently discards anything outside the alphabet, so
+ * garbage decodes to garbage instead of failing. The payload is checked before
+ * it is handed over.
+ */
+function decodeBase64Strict(data: string): Buffer {
+  const compact = data.replace(/\s/g, '')
+  if (compact.length === 0) throw new TotpError('Export data is empty')
+
+  const body = compact.replace(/=+$/, '')
+  // Both alphabets appear in the wild; mixing them does not.
+  const standard = /^[A-Za-z0-9+/]*$/.test(body)
+  const urlSafe = /^[A-Za-z0-9\-_]*$/.test(body)
+  if (!standard && !urlSafe) {
+    throw new TotpError('That export data is not valid — try exporting from your phone again')
+  }
+  if (body.length % 4 === 1) {
+    throw new TotpError('That export data is incomplete — try exporting from your phone again')
+  }
+
+  const normalized = urlSafe && !standard ? body.replace(/-/g, '+').replace(/_/g, '/') : body
+  const decoded = Buffer.from(normalized, 'base64')
+  if (decoded.length !== Math.floor((body.length * 3) / 4)) {
+    throw new TotpError('That export data could not be decoded')
+  }
+  return decoded
+}
+
+/**
  * Decode an otpauth-migration:// export into its accounts.
  *
- * Google Authenticator splits large exports across several QR codes, so a
- * user with many accounts will have several of these URIs; each is decoded
- * independently and the results combined by the caller.
+ * Google Authenticator splits large exports across several QR codes, so a user
+ * with many accounts will have several of these URIs; each is decoded
+ * independently and the caller combines them using the batch fields.
  */
-export function parseMigrationUri(uri: string): MigrationEntry[] {
+export function parseMigrationUri(uri: string): MigrationPayload {
   let parsed: URL
   try {
     parsed = new URL(uri.trim())
@@ -176,35 +328,50 @@ export function parseMigrationUri(uri: string): MigrationEntry[] {
     throw new TotpError('Link must start with otpauth-migration://')
   }
 
-  const data = parsed.searchParams.get('data')
-  if (!data) throw new TotpError('Export link is missing its data')
-
-  let payload: Buffer
-  try {
-    // The value is base64 that has already been URL-decoded by URL parsing.
-    payload = Buffer.from(data, 'base64')
-  } catch {
-    throw new TotpError('Export data could not be decoded')
-  }
-  if (payload.length === 0) throw new TotpError('Export data is empty')
+  const payload = decodeBase64Strict(extractDataParam(uri.trim()))
 
   const r = new Reader(payload)
   const entries: MigrationEntry[] = []
+  let batchIndex = 0
+  let batchSize = 1
+  let batchId = 0
 
   while (!r.done) {
     const key = r.varint()
     const field = key >>> 3
     const wireType = key & 0x07
-    if (field === 1 && wireType === WIRE_LENGTH_DELIMITED) {
-      const entry = parseOtpParameters(r.bytes())
-      if (entry) entries.push(entry)
-    } else {
-      r.skip(wireType)
+
+    switch (field) {
+      case 1:
+        expectWire(wireType, WIRE_LENGTH_DELIMITED)
+        entries.push(parseOtpParameters(r.bytes()))
+        break
+      case 3:
+        expectWire(wireType, WIRE_VARINT)
+        batchSize = r.varint()
+        break
+      case 4:
+        expectWire(wireType, WIRE_VARINT)
+        batchIndex = r.varint()
+        break
+      case 5:
+        expectWire(wireType, WIRE_VARINT)
+        batchId = r.varint()
+        break
+      default:
+        r.skip(wireType)
     }
   }
 
   if (entries.length === 0) {
     throw new TotpError('No accounts were found in that export')
   }
-  return entries
+
+  return {
+    entries,
+    // A single-QR export omits these; treat it as part 1 of 1.
+    batchIndex: Number.isSafeInteger(batchIndex) ? batchIndex : 0,
+    batchSize: Number.isSafeInteger(batchSize) && batchSize > 0 ? batchSize : 1,
+    batchId: Number.isSafeInteger(batchId) ? batchId : 0,
+  }
 }

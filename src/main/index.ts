@@ -10,6 +10,7 @@ import { updaterService } from './updater/AutoUpdater'
 import { getAllAccounts } from './db/queries/accounts'
 import { reindexAllMessages } from './db/queries/search'
 import { reconcileTotpSecrets } from './totp/totpStore'
+import { discardAllStagedImports } from './totp/importStaging'
 
 // Initialise logging before everything else so all console.* calls are captured
 initLogger()
@@ -84,12 +85,19 @@ async function initApp(): Promise<void> {
   initDatabase()
 
   // Drop authenticator secrets with no surviving metadata row — otherwise a
-  // database that was replaced (corruption recovery) would strand them in the
-  // credential store forever, with no way for the user to see or remove them.
+  // failed delete would strand them in the credential store forever, with no
+  // way for the user to see or remove them. Retained ones are the case where
+  // deleting would be unrecoverable; see reconcileTotpSecrets.
   try {
-    const orphans = reconcileTotpSecrets()
-    if (orphans > 0) {
-      logger.warn(`[totp] Removed ${orphans} authenticator secret(s) with no matching account`)
+    const { removed, retained } = reconcileTotpSecrets()
+    if (removed > 0) {
+      logger.warn(`[totp] Removed ${removed} authenticator secret(s) with no matching account`)
+    }
+    if (retained > 0) {
+      logger.warn(
+        `[totp] Kept ${retained} authenticator secret(s) with no matching account: no accounts ` +
+          `remain, so this may be a replaced database rather than deleted authenticators`
+      )
     }
   } catch (err) {
     logger.warn('[totp] Could not reconcile stored authenticator secrets:', err)
@@ -108,6 +116,14 @@ async function createWindow(): Promise<void> {
   } else {
     await win.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
+
+  // A pending authenticator import holds decoded keys in memory until it is
+  // committed or cancelled. A reload throws away the renderer that would have
+  // done either, so the staging table is cleared with it.
+  win.webContents.on('did-start-navigation', (_event, _url, _isInPlace, isMainFrame) => {
+    if (isMainFrame) discardAllStagedImports()
+  })
+  win.on('closed', () => discardAllStagedImports())
 
   // C1: Set the window reference BEFORE starting account sync so every
   //     push event during the initial sync has somewhere to go.

@@ -322,19 +322,44 @@ export interface TotpCodeView extends TotpAccountMeta {
   error?: string
 }
 
-export interface TotpProvisioning {
-  secret: string
+export type TotpImportEntryStatus = 'ready' | 'duplicate' | 'invalid' | 'unsupported'
+
+/**
+ * One entry of a pending import. Metadata only — the seed stays in the main
+ * process, and the renderer commits by index rather than by value.
+ */
+export interface TotpImportEntry {
+  index: number
   issuer: string
   label: string
   algorithm: TotpAlgorithm
   digits: number
   period: number
+  status: TotpImportEntryStatus
+  /** Why this entry cannot be imported. Never contains key material. */
+  reason?: string
 }
 
-export interface TotpMigrationEntry extends TotpProvisioning {
-  /** Present when Email Hub cannot use this entry (e.g. counter-based). */
-  unsupportedReason?: string
+export interface TotpImportPreview {
+  stagingId: string
+  entries: TotpImportEntry[]
+  counts: Record<TotpImportEntryStatus, number>
+  /**
+   * Google Authenticator splits a large export across several QR codes.
+   * `received` lists the one-based part numbers decoded so far.
+   */
+  parts: { received: number[]; total: number }
 }
+
+export interface TotpImportResult {
+  imported: number
+  skipped: { index: number; reason: string }[]
+}
+
+/** A link the user pasted, or the bytes of an image they dropped. */
+export type TotpImportSource =
+  | { kind: 'text'; text: string }
+  | { kind: 'image'; bytes: Uint8Array }
 
 export interface TotpAddPayload {
   secret: string
@@ -487,15 +512,24 @@ export interface EmailAPI {
   // Authenticator (TOTP). No method returns a stored secret — by design.
   totp: {
     /** Metadata plus the current short-lived code for each authenticator. */
-    list(): Promise<TotpCodeView[]>
-    /** Parses an otpauth:// link the user pasted, for the setup form. */
-    parseUri(uri: string): Promise<TotpProvisioning>
-    /** Decodes a Google Authenticator export, which may hold many accounts. */
-    parseMigration(uri: string): Promise<TotpMigrationEntry[]>
-    add(payload: TotpAddPayload): Promise<TotpAccountMeta>
-    verify(id: string, code: string): Promise<{ verified: boolean }>
-    rename(id: string, issuer: string, label: string): Promise<void>
-    remove(id: string): Promise<void>
+    // Declared with the real IpcResult envelope so the "no secret reaches the
+    // renderer" contract is checked by the compiler rather than by comment.
+    list(): Promise<IpcResult<TotpCodeView[]>>
+    add(payload: TotpAddPayload): Promise<IpcResult<TotpAccountMeta>>
+    verify(id: string, code: string): Promise<IpcResult<{ verified: boolean }>>
+    rename(id: string, issuer: string, label: string): Promise<IpcResult<null>>
+    remove(id: string): Promise<IpcResult<null>>
+    /**
+     * Decodes a pasted link or a dropped QR image into a preview. Decoding
+     * happens entirely in the main process; nothing is uploaded anywhere.
+     * Pass an existing stagingId to add another part of a split export.
+     */
+    importScan(
+      source: TotpImportSource,
+      stagingId?: string
+    ): Promise<IpcResult<TotpImportPreview>>
+    importCommit(stagingId: string, indices: number[]): Promise<IpcResult<TotpImportResult>>
+    importDiscard(stagingId: string): Promise<IpcResult<null>>
   }
 
   // Bulk operations

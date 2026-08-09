@@ -1,6 +1,6 @@
 {
   "name": "universal-email-hub",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "description": "Universal Email Hub — Premium Multi-Account Desktop Email Client",
   "main": "out/main/index.js",
   "private": true,
@@ -74,6 +74,7 @@
     "framer-motion": "^11.13.1",
     "googleapis": "^144.0.0",
     "imapflow": "^1.0.170",
+    "jsqr": "^1.4.0",
     "lucide-react": "^0.468.0",
     "mailparser": "^3.7.1",
     "node-machine-id": "^1.1.12",
@@ -96,6 +97,7 @@
     "@types/mailparser": "^3.4.4",
     "@types/node": "^22.10.1",
     "@types/nodemailer": "^8.0.1",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@types/sanitize-html": "^2.13.0",
@@ -111,6 +113,7 @@
     "eslint-plugin-react-hooks": "^5.1.0",
     "png2icons": "^2.0.1",
     "prettier": "^3.4.2",
+    "qrcode": "^1.5.4",
     "typescript": "^5.7.2",
     "vite": "^5.4.14",
     "vitest": "^2.1.8"

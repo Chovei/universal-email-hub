@@ -112,14 +112,16 @@ export const IPC = {
   FOLDER_EXECUTE: 'folder:execute',
 
   // ── Authenticator (TOTP) ──────────────────────────────────────────────────
-  // Codes only: no channel ever returns a stored secret.
+  // Codes only: no channel ever returns a secret, staged or stored.
   TOTP_LIST: 'totp:list',
   TOTP_ADD: 'totp:add',
-  TOTP_PARSE_URI: 'totp:parseUri',
-  TOTP_PARSE_MIGRATION: 'totp:parseMigration',
   TOTP_VERIFY: 'totp:verify',
   TOTP_RENAME: 'totp:rename',
   TOTP_DELETE: 'totp:delete',
+  /** Decode a link or a QR image into a metadata-only import preview. */
+  TOTP_IMPORT_SCAN: 'totp:importScan',
+  TOTP_IMPORT_COMMIT: 'totp:importCommit',
+  TOTP_IMPORT_DISCARD: 'totp:importDiscard',
 } as const
 
 export type IpcChannel = (typeof IPC)[keyof typeof IPC]

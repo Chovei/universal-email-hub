@@ -6,6 +6,25 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.31] - 2026-08-09
+
+### ✨ Improvements
+
+- **Drop in the QR code from Google Authenticator.** Verification Center → Add authenticator → Import now takes the export QR straight from a screenshot — drag it in, paste it with Ctrl+V, or browse for it. It is read on your computer and never uploaded anywhere
+- **Review before you import.** Every account found is listed with its service, name and settings, and marked ready, duplicate, unsupported or damaged. Tick the ones you want, or import them all. Nothing is added until you say so, and either every account lands or none does
+- **Accounts you already have are recognised.** Importing the same export twice no longer creates a second copy of each authenticator
+- **Split exports are handled.** A large export becomes several QR codes; Email Hub now tells you which parts it has and which are still missing
+- **Rename an authenticator**, and check one you skipped verifying when you added it
+
+### 🐛 Fixes
+
+- **A transient database error could destroy every authenticator key you owned.** Recovering from an unreadable database starts a fresh one, and the cleanup that follows deleted every stored key with no matching account. Keys are now kept whenever that cleanup cannot tell a lost database from deliberately removed authenticators — there is no other copy of an authenticator key to recover from
+- **Some Google Authenticator exports imported the wrong key, silently.** Two decoding faults — one in how the export data was read from the link, one in the export format itself — could produce a valid-looking account whose codes would never work, with no error. Both are fixed, and damaged entries are now reported instead of being quietly skipped
+- **Import no longer stops half way.** Previously an export where one account failed would leave the rest imported, the failures unmentioned, and the dialog closing as though it had worked
+- **Codes could be shown as live after they had expired.** The countdown now follows the clock instead of counting timer ticks, so it corrects itself after the window has been in the background or the machine has slept
+- **A failure to read your authenticators showed “No authenticators yet”** instead of an error, and stopped the codes updating until restart
+- Authenticator keys are no longer sent to the app window during an import; only names and settings are
+
 ## [0.1.30] - 2026-08-09
 
 ### ✨ Improvements
@@ -279,7 +298,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.30...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.31...HEAD
+[0.1.31]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.30...v0.1.31
 [0.1.30]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.29...v0.1.30
 [0.1.29]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.28...v0.1.29
 [0.1.28]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.27...v0.1.28

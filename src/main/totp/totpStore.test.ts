@@ -31,20 +31,45 @@ vi.mock('../db/client', () => ({
         }
       },
     }),
+    // better-sqlite3 rolls the whole statement group back on a throw; the fake
+    // restores its snapshot so the atomic import path behaves the same here.
+    transaction:
+      (fn: (...args: unknown[]) => unknown) =>
+      (...args: unknown[]) => {
+        const snapshot = rows.map((row) => ({ ...row }))
+        try {
+          return fn(...args)
+        } catch (err) {
+          rows.length = 0
+          rows.push(...snapshot)
+          throw err
+        }
+      },
   }),
 }))
 
 vi.mock('../security/keychain', () => ({
   credentialStore: {
     set: (k: string, v: string) => credentials.set(k, v),
+    setMany: (entries: Record<string, string>) => {
+      for (const [k, v] of Object.entries(entries)) credentials.set(k, v)
+    },
     get: (k: string) => credentials.get(k) ?? null,
     delete: (k: string) => credentials.delete(k),
     has: (k: string) => credentials.has(k),
+    keys: () => [...credentials.keys()],
   },
   getCredentialProtection: () => ({ encrypted: true, method: 'Test' }),
 }))
 
-import { createTotpAccount, listTotpCodes, deleteTotpAccount, verifyTotpAccount } from './totpStore'
+import {
+  createTotpAccount,
+  createTotpAccounts,
+  listTotpCodes,
+  deleteTotpAccount,
+  verifyTotpAccount,
+  reconcileTotpSecrets,
+} from './totpStore'
 import { generateTotp } from './totp'
 
 const SECRET = 'JBSWY3DPEHPK3PXP'
@@ -86,11 +111,21 @@ describe('totpStore security contract', () => {
     expect(JSON.stringify(rows)).not.toContain(SECRET)
   })
 
-  it('produces a code matching the pure engine', () => {
-    createTotpAccount(input)
+  it('generates codes with the account’s own settings, not the defaults', () => {
+    // Deliberately every parameter away from its default: if configFor stopped
+    // forwarding one of them, generateTotp would silently fall back to the
+    // default and a same-defaults comparison would still pass.
+    const custom = { ...input, algorithm: 'SHA256' as const, digits: 8, period: 60 }
+    createTotpAccount(custom)
     const at = 1234567890 * 1000
+
     const listed = listTotpCodes(at)
-    expect(listed[0].code).toBe(generateTotp({ secret: SECRET }, at).code)
+    expect(listed[0].code).toBe(
+      generateTotp({ secret: SECRET, algorithm: 'SHA256', digits: 8, period: 60 }, at).code
+    )
+    // ...and is genuinely different from what the defaults would have produced
+    expect(listed[0].code).not.toBe(generateTotp({ secret: SECRET }, at).code)
+    expect(listed[0].code).toHaveLength(8)
   })
 
   it('verifies a correct code and rejects a wrong one', () => {
@@ -122,5 +157,79 @@ describe('totpStore security contract', () => {
     expect(() => createTotpAccount({ ...input, secret: 'not-base32!' })).toThrow()
     expect(rows).toHaveLength(0)
     expect(credentials.size).toBe(0)
+  })
+})
+
+describe('createTotpAccounts', () => {
+  beforeEach(() => {
+    rows.length = 0
+    credentials.clear()
+  })
+
+  it('writes every account of a batch', () => {
+    const created = createTotpAccounts([
+      input,
+      { ...input, label: 'second' },
+      { ...input, label: 'third' },
+    ])
+    expect(created).toHaveLength(3)
+    expect(rows).toHaveLength(3)
+    expect(credentials.size).toBe(3)
+  })
+
+  it('refuses the whole batch when one entry is unusable, writing nothing', () => {
+    expect(() =>
+      createTotpAccounts([input, { ...input, secret: 'SHORT' }, { ...input, label: 'third' }])
+    ).toThrow()
+    // The good entries must not be half-committed: validation happens before
+    // the first write, so neither store should have been touched at all.
+    expect(rows).toHaveLength(0)
+    expect(credentials.size).toBe(0)
+  })
+})
+
+describe('reconcileTotpSecrets', () => {
+  beforeEach(() => {
+    rows.length = 0
+    credentials.clear()
+  })
+
+  it('removes a stored secret whose account is gone', () => {
+    createTotpAccount(input)
+    createTotpAccount({ ...input, label: 'kept' })
+    // Simulate a delete whose credential write failed: the row went, the seed
+    // stayed. This is the case reconciliation exists for.
+    rows.splice(0, 1)
+
+    expect(reconcileTotpSecrets()).toEqual({ removed: 1, retained: 0 })
+    expect(credentials.size).toBe(1)
+  })
+
+  it('keeps orphaned secrets when no accounts remain at all', () => {
+    createTotpAccount(input)
+    createTotpAccount({ ...input, label: 'second' })
+    // A database replaced wholesale — corruption recovery renames it aside and
+    // opens an empty one. The credential store is the ONLY copy of a TOTP
+    // seed, so reaping here would destroy every authenticator the user owns
+    // from one transient file error.
+    rows.length = 0
+
+    expect(reconcileTotpSecrets()).toEqual({ removed: 0, retained: 2 })
+    expect(credentials.size).toBe(2)
+  })
+
+  it('does nothing when every secret has an account', () => {
+    createTotpAccount(input)
+    expect(reconcileTotpSecrets()).toEqual({ removed: 0, retained: 0 })
+    expect(credentials.size).toBe(1)
+  })
+
+  it('leaves credentials belonging to other subsystems alone', () => {
+    createTotpAccount(input)
+    credentials.set('account:abc:credentials', 'an email password')
+    rows.length = 0
+
+    reconcileTotpSecrets()
+    expect(credentials.get('account:abc:credentials')).toBe('an email password')
   })
 })

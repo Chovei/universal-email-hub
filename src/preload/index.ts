@@ -122,12 +122,14 @@ const emailAPI: EmailAPI = {
 
   totp: {
     list: () => invoke(IPC.TOTP_LIST),
-    parseUri: (uri: string) => invoke(IPC.TOTP_PARSE_URI, { uri }),
-    parseMigration: (uri: string) => invoke(IPC.TOTP_PARSE_MIGRATION, { uri }),
     add: (payload) => invoke(IPC.TOTP_ADD, payload),
     verify: (id: string, code: string) => invoke(IPC.TOTP_VERIFY, { id, code }),
     rename: (id: string, issuer: string, label: string) => invoke(IPC.TOTP_RENAME, { id, issuer, label }),
     remove: (id: string) => invoke(IPC.TOTP_DELETE, { id }),
+    importScan: (source, stagingId) => invoke(IPC.TOTP_IMPORT_SCAN, { source, stagingId }),
+    importCommit: (stagingId: string, indices: number[]) =>
+      invoke(IPC.TOTP_IMPORT_COMMIT, { stagingId, indices }),
+    importDiscard: (stagingId: string) => invoke(IPC.TOTP_IMPORT_DISCARD, { stagingId }),
   },
 
   bulk: {

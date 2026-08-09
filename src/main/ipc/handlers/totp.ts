@@ -9,8 +9,13 @@ import {
   verifyTotpAccount,
   markTotpVerified,
 } from '../../totp/totpStore'
-import { parseOtpauthUri, normalizeSecret, decodeBase32, validateAlgorithm, TotpError } from '../../totp/totp'
-import { parseMigrationUri } from '../../totp/migration'
+import { normalizeSecret, decodeBase32, validateAlgorithm, TotpError } from '../../totp/totp'
+import {
+  stageImportText,
+  commitStagedImport,
+  discardStagedImport,
+} from '../../totp/importStaging'
+import { decodeQrFromImageBytes, MAX_IMAGE_BYTES } from '../../totp/qrImage'
 
 /**
  * Only TotpError messages are written for users and known to be value-free.
@@ -24,10 +29,14 @@ function safeMessage(err: unknown, fallback: string): string {
 /**
  * Authenticator IPC.
  *
- * Deliberately absent: any channel that returns a stored secret. There is no
- * getTotpSecret(). Secrets travel in exactly one direction, once — inward,
- * when the user sets an account up — and codes travel outward. Anything the
- * renderer can ask for is either metadata or a code that expires in seconds.
+ * Deliberately absent: any channel that returns a secret. There is no
+ * getTotpSecret(), and the import channels return metadata only — a pending
+ * import lives in the main process and is committed by index, so decoding a
+ * QR code never hands the renderer material it did not already have.
+ *
+ * Secrets travel in exactly one direction, once — inward, when the user types
+ * a setup key — and codes travel outward. Anything the renderer can ask for is
+ * either metadata or a code that expires in seconds.
  */
 
 const AlgorithmSchema = z.enum(['SHA1', 'SHA256', 'SHA512'])
@@ -55,7 +64,24 @@ const RenameSchema = z.object({
   label: z.string().min(1).max(200),
 })
 
-const UriSchema = z.object({ uri: z.string().min(1).max(2048) })
+const StagingIdSchema = z.string().min(1).max(100)
+
+/** A migration URI for a large export runs well past a normal link length. */
+const ScanSchema = z.object({
+  source: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('text'), text: z.string().min(1).max(16384) }),
+    // Size is checked in the handler rather than here: a schema failure is a
+    // ZodError, and safeMessage replaces those with a generic string — so a
+    // message written into a refine() would never reach the user.
+    z.object({ kind: z.literal('image'), bytes: z.instanceof(Uint8Array) }),
+  ]),
+  stagingId: StagingIdSchema.optional(),
+})
+
+const CommitSchema = z.object({
+  stagingId: StagingIdSchema,
+  indices: z.array(z.number().int().min(0).max(10000)).max(1000),
+})
 
 export function registerTotpHandlers(): void {
   ipcMain.handle(IPC.TOTP_LIST, async () => {
@@ -63,40 +89,6 @@ export function registerTotpHandlers(): void {
       return { data: listTotpCodes() }
     } catch (err) {
       return { error: { code: 'TOTP_LIST_FAILED', message: safeMessage(err, 'Could not read authenticators') } }
-    }
-  })
-
-  // Parses a provisioning URI for the setup form. Returns the secret to the
-  // renderer only because the renderer supplied the URI containing it in the
-  // first place — no stored data is exposed.
-  ipcMain.handle(IPC.TOTP_PARSE_URI, async (_event, payload: unknown) => {
-    try {
-      const { uri } = UriSchema.parse(payload)
-      return { data: parseOtpauthUri(uri) }
-    } catch (err) {
-      return {
-        error: {
-          code: 'TOTP_URI_INVALID',
-          message: safeMessage(err, 'Could not read that link'),
-        },
-      }
-    }
-  })
-
-  // Decodes a Google Authenticator "Transfer accounts" export, which can
-  // carry many accounts at once. Like parseUri, this only reads data the
-  // renderer supplied; it touches nothing in storage.
-  ipcMain.handle(IPC.TOTP_PARSE_MIGRATION, async (_event, payload: unknown) => {
-    try {
-      const { uri } = UriSchema.parse(payload)
-      return { data: parseMigrationUri(uri) }
-    } catch (err) {
-      return {
-        error: {
-          code: 'TOTP_MIGRATION_INVALID',
-          message: safeMessage(err, 'Could not read that export link'),
-        },
-      }
     }
   })
 
@@ -125,6 +117,59 @@ export function registerTotpHandlers(): void {
           message: safeMessage(err, 'Could not add authenticator'),
         },
       }
+    }
+  })
+
+  /**
+   * Decode a pasted link or a dropped QR image.
+   *
+   * The image is decoded here, in this process, by a pure-JS decoder. It is
+   * never written to disk, never uploaded, and neither it nor the payload it
+   * contains is logged. What comes back is a list of names and settings.
+   */
+  ipcMain.handle(IPC.TOTP_IMPORT_SCAN, async (_event, payload: unknown) => {
+    try {
+      const { source, stagingId } = ScanSchema.parse(payload)
+      if (source.kind === 'image' && source.bytes.byteLength > MAX_IMAGE_BYTES) {
+        throw new TotpError('That image is too large — a screenshot of the QR code is plenty')
+      }
+      const text =
+        source.kind === 'image'
+          ? decodeQrFromImageBytes(Buffer.from(source.bytes))
+          : source.text
+      return { data: stageImportText(text, stagingId) }
+    } catch (err) {
+      return {
+        error: {
+          code: 'TOTP_IMPORT_SCAN_FAILED',
+          message: safeMessage(err, 'That could not be read as an authenticator export'),
+        },
+      }
+    }
+  })
+
+  ipcMain.handle(IPC.TOTP_IMPORT_COMMIT, async (_event, payload: unknown) => {
+    try {
+      const { stagingId, indices } = CommitSchema.parse(payload)
+      return { data: commitStagedImport(stagingId, indices) }
+    } catch (err) {
+      return {
+        error: {
+          code: 'TOTP_IMPORT_COMMIT_FAILED',
+          message: safeMessage(err, 'Those authenticators could not be imported'),
+        },
+      }
+    }
+  })
+
+  ipcMain.handle(IPC.TOTP_IMPORT_DISCARD, async (_event, payload: unknown) => {
+    try {
+      const { stagingId } = z.object({ stagingId: StagingIdSchema }).parse(payload)
+      discardStagedImport(stagingId)
+      return { data: null }
+    } catch {
+      // Discarding is best-effort cleanup; the staging entry expires anyway.
+      return { data: null }
     }
   })
 

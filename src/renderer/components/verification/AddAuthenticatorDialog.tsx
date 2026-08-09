@@ -1,17 +1,11 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { motion } from 'framer-motion'
-import { X, ShieldAlert, KeyRound, Loader2, CheckCircle2 } from 'lucide-react'
+import { X, ShieldAlert, KeyRound, Loader2, CheckCircle2, QrCode, Keyboard } from 'lucide-react'
 import { cn } from '../../lib/utils'
-import type {
-  TotpAddPayload,
-  TotpAccountMeta,
-  TotpProvisioning,
-  TotpMigrationEntry,
-} from '@shared/types/ipc'
+import { AuthenticatorImportPanel } from './AuthenticatorImportPanel'
+import type { TotpAddPayload, TotpAccountMeta } from '@shared/types/ipc'
 
-type Envelope<T> = { data?: T; error?: { code: string; message: string } }
-
-type Step = 'consent' | 'details' | 'verify' | 'done'
+type Step = 'consent' | 'choose' | 'import' | 'manual' | 'verify' | 'done'
 
 export function AddAuthenticatorDialog({
   onClose,
@@ -24,97 +18,56 @@ export function AddAuthenticatorDialog({
   const [issuer, setIssuer] = useState('')
   const [label, setLabel] = useState('')
   const [secret, setSecret] = useState('')
+  const [pastedLink, setPastedLink] = useState('')
   const [advanced, setAdvanced] = useState<Pick<TotpAddPayload, 'algorithm' | 'digits' | 'period'>>({
     algorithm: 'SHA1',
     digits: 6,
     period: 30,
   })
   const [created, setCreated] = useState<TotpAccountMeta | null>(null)
-  const [migration, setMigration] = useState<TotpMigrationEntry[]>([])
   const [verifyCode, setVerifyCode] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
 
-  // Pasting a link fills every field, including the ones most people would
-  // otherwise have to guess at. A Google Authenticator export carries many
-  // accounts at once and switches the dialog into bulk-import mode.
-  const tryParseUri = useCallback(async (value: string) => {
-    const trimmed = value.trim()
-    const lower = trimmed.toLowerCase()
+  const panel = useRef<HTMLDivElement>(null)
 
-    if (lower.startsWith('otpauth-migration://')) {
-      const res = (await window.emailAPI.totp.parseMigration(trimmed)) as unknown as Envelope<
-        TotpMigrationEntry[]
-      >
-      if (res.error || !res.data) {
-        setError(res.error?.message ?? 'That export could not be read')
-        return true
-      }
-      setMigration(res.data)
+  // Escape closes, and focus starts inside rather than wherever it was.
+  useEffect(() => {
+    panel.current?.focus()
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  /**
+   * A pasted otpauth:// or otpauth-migration:// link belongs on the import
+   * path: the main process reads it there, so the key never has to sit in this
+   * window's state waiting to be submitted.
+   */
+  const handleSecretChange = useCallback((value: string) => {
+    if (value.trim().toLowerCase().startsWith('otpauth')) {
+      setPastedLink(value.trim())
+      setSecret('')
       setError('')
-      return true
-    }
-
-    if (!lower.startsWith('otpauth://')) return false
-    const res = (await window.emailAPI.totp.parseUri(trimmed)) as unknown as Envelope<TotpProvisioning>
-    if (res.error || !res.data) {
-      setError(res.error?.message ?? 'That link could not be read')
-      return true
-    }
-    setSecret(res.data.secret)
-    setIssuer(res.data.issuer)
-    setLabel(res.data.label)
-    setAdvanced({ algorithm: res.data.algorithm, digits: res.data.digits, period: res.data.period })
-    setError('')
-    return true
-  }, [])
-
-  const importAll = useCallback(async () => {
-    const usable = migration.filter((m) => !m.unsupportedReason)
-    setBusy(true)
-    setError('')
-    let added = 0
-    for (const entry of usable) {
-      const res = (await window.emailAPI.totp.add({
-        secret: entry.secret,
-        issuer: entry.issuer,
-        label: entry.label,
-        algorithm: entry.algorithm,
-        digits: entry.digits,
-        period: entry.period,
-      })) as unknown as Envelope<TotpAccountMeta>
-      if (res.data) added++
-    }
-    setBusy(false)
-    setMigration([])
-    onAdded()
-    if (added === 0) {
-      setError('None of those accounts could be added')
+      setStep('import')
       return
     }
-    onClose()
-  }, [migration, onAdded, onClose])
-
-  const handleSecretChange = useCallback(
-    (value: string) => {
-      setSecret(value)
-      void tryParseUri(value)
-    },
-    [tryParseUri]
-  )
+    setSecret(value)
+  }, [])
 
   const submit = useCallback(async () => {
     setBusy(true)
     setError('')
-    const res = (await window.emailAPI.totp.add({
-      secret,
-      issuer,
-      label,
-      ...advanced,
-    })) as unknown as Envelope<TotpAccountMeta>
+    // A rejected invoke (rather than an error envelope) would otherwise leave
+    // Continue disabled for good, with nothing explaining why.
+    const res = await window.emailAPI.totp
+      .add({ secret, issuer, label, ...advanced })
+      .catch(() => null)
     setBusy(false)
-    if (res.error || !res.data) {
-      setError(res.error?.message ?? 'Could not add this authenticator')
+    if (!res || res.error || !res.data) {
+      setError(res?.error?.message ?? 'Could not add this authenticator')
       return
     }
     setCreated(res.data)
@@ -128,17 +81,16 @@ export function AddAuthenticatorDialog({
     if (!created) return
     setBusy(true)
     setError('')
-    const res = (await window.emailAPI.totp.verify(created.id, verifyCode)) as unknown as Envelope<{
-      verified: boolean
-    }>
+    const res = await window.emailAPI.totp.verify(created.id, verifyCode).catch(() => null)
     setBusy(false)
-    if (res.data?.verified) {
+    if (res?.data?.verified) {
       setStep('done')
       onAdded()
       return
     }
     setError(
-      'That code did not match. Check you copied the key correctly, and that this computer’s clock is accurate.'
+      res?.error?.message ??
+        'That code did not match. Check you copied the key correctly, and that this computer’s clock is accurate.'
     )
   }, [created, verifyCode, onAdded])
 
@@ -151,17 +103,25 @@ export function AddAuthenticatorDialog({
       onClick={onClose}
     >
       <motion.div
+        ref={panel}
+        tabIndex={-1}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="add-authenticator-title"
         initial={{ opacity: 0, scale: 0.97, y: -6 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.97, y: -6 }}
         transition={{ duration: 0.15 }}
-        className="w-[460px] max-w-[92vw] rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-2xl overflow-hidden"
+        className="w-[480px] max-w-[92vw] rounded-2xl border border-[var(--color-border)] bg-[var(--color-card)] shadow-2xl overflow-hidden focus:outline-none"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center gap-2.5 px-5 py-4 border-b border-[var(--color-border)]">
           <KeyRound className="w-4 h-4 text-[var(--color-primary)]" />
-          <h2 className="flex-1 text-sm font-semibold text-[var(--color-foreground)]">
-            Add authenticator
+          <h2
+            id="add-authenticator-title"
+            className="flex-1 text-sm font-semibold text-[var(--color-foreground)]"
+          >
+            {step === 'import' ? 'Import authenticators' : 'Add authenticator'}
           </h2>
           <button
             onClick={onClose}
@@ -198,7 +158,7 @@ export function AddAuthenticatorDialog({
                   Cancel
                 </button>
                 <button
-                  onClick={() => setStep('details')}
+                  onClick={() => setStep('choose')}
                   className="px-3 py-1.5 rounded-lg text-sm bg-[var(--color-primary)] text-white hover:opacity-90"
                 >
                   I understand, continue
@@ -207,66 +167,41 @@ export function AddAuthenticatorDialog({
             </div>
           )}
 
-          {step === 'details' && migration.length > 0 && (
-            <div className="flex flex-col gap-3">
-              <p className="text-sm text-[var(--color-foreground)]">
-                Found <span className="font-medium">{migration.length}</span> account
-                {migration.length === 1 ? '' : 's'} in that export.
-              </p>
-              <div className="max-h-56 overflow-y-auto flex flex-col gap-1 rounded-lg border border-[var(--color-border)] p-2">
-                {migration.map((m, i) => (
-                  <div
-                    key={`${m.issuer}:${m.label}:${i}`}
-                    className="flex items-center justify-between gap-2 px-1.5 py-1 text-xs"
-                  >
-                    <span className="truncate text-[var(--color-foreground)]">
-                      <span className="font-medium">{m.issuer || 'Unknown'}</span>
-                      {m.label && <span className="text-[var(--color-muted-foreground)]"> · {m.label}</span>}
-                    </span>
-                    {m.unsupportedReason ? (
-                      <span className="shrink-0 text-amber-500" title={m.unsupportedReason}>
-                        skipped
-                      </span>
-                    ) : (
-                      <span className="shrink-0 text-emerald-500">will import</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <p className="text-[11px] text-[var(--color-muted-foreground)]">
-                Your phone keeps working exactly as it does now — the same key can live on any number
-                of devices, and they all show the same code.
-              </p>
-              {error && <p className="text-xs text-red-500">{error}</p>}
-              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={() => { setMigration([]); setSecret('') }}
-                  className="px-3 py-1.5 rounded-lg text-sm border border-[var(--color-border)] text-[var(--color-foreground)] hover:bg-[var(--color-accent)]"
-                >
-                  Back
-                </button>
-                <button
-                  onClick={() => void importAll()}
-                  disabled={busy || migration.every((m) => m.unsupportedReason)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm bg-[var(--color-primary)] text-white hover:opacity-90 disabled:opacity-50"
-                >
-                  {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  Import {migration.filter((m) => !m.unsupportedReason).length} account
-                  {migration.filter((m) => !m.unsupportedReason).length === 1 ? '' : 's'}
-                </button>
-              </div>
+          {step === 'choose' && (
+            <div className="flex flex-col gap-2.5">
+              <ChoiceButton
+                icon={<QrCode className="w-4 h-4" />}
+                title="Import from Google Authenticator"
+                detail="Drop the export QR code, or paste an otpauth:// link. Several accounts at once."
+                onClick={() => setStep('import')}
+              />
+              <ChoiceButton
+                icon={<Keyboard className="w-4 h-4" />}
+                title="Enter a setup key by hand"
+                detail="For the key a service shows when you choose “can’t scan the code”."
+                onClick={() => setStep('manual')}
+              />
             </div>
           )}
 
-          {step === 'details' && migration.length === 0 && (
+          {step === 'import' && (
+            <AuthenticatorImportPanel
+              initialText={pastedLink || undefined}
+              onImported={() => onAdded()}
+              onCancel={onClose}
+            />
+          )}
+
+          {step === 'manual' && (
             <div className="flex flex-col gap-3">
-              <Field label="Setup key, otpauth:// link, or Google Authenticator export">
+              <Field label="Setup key (or paste an otpauth:// link)">
                 <input
                   value={secret}
                   onChange={(e) => handleSecretChange(e.target.value)}
                   placeholder="JBSW Y3DP EHPK 3PXP"
                   autoComplete="off"
                   spellCheck={false}
+                  autoFocus
                   className="w-full px-2.5 py-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-background)] text-sm font-mono text-[var(--color-foreground)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]/40"
                 />
               </Field>
@@ -333,10 +268,10 @@ export function AddAuthenticatorDialog({
 
               <div className="flex gap-2 justify-end pt-1">
                 <button
-                  onClick={onClose}
+                  onClick={() => setStep('choose')}
                   className="px-3 py-1.5 rounded-lg text-sm border border-[var(--color-border)] text-[var(--color-foreground)] hover:bg-[var(--color-accent)]"
                 >
-                  Cancel
+                  Back
                 </button>
                 <button
                   onClick={() => void submit()}
@@ -402,6 +337,35 @@ export function AddAuthenticatorDialog({
         </div>
       </motion.div>
     </motion.div>
+  )
+}
+
+function ChoiceButton({
+  icon,
+  title,
+  detail,
+  onClick,
+}: {
+  icon: React.ReactNode
+  title: string
+  detail: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-start gap-3 p-3 rounded-xl border border-[var(--color-border)] text-left hover:bg-[var(--color-accent)] transition-colors"
+    >
+      <span className="w-8 h-8 rounded-lg bg-[var(--color-primary)]/15 text-[var(--color-primary)] flex items-center justify-center shrink-0">
+        {icon}
+      </span>
+      <span className="min-w-0">
+        <span className="block text-sm font-medium text-[var(--color-foreground)]">{title}</span>
+        <span className="block text-[11px] text-[var(--color-muted-foreground)] leading-relaxed">
+          {detail}
+        </span>
+      </span>
+    </button>
   )
 }
 
