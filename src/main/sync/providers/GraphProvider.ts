@@ -169,8 +169,14 @@ const MSG_SELECT = [
   'conversationId', 'categories', 'internetMessageHeaders',
 ].join(',')
 
+// contentId lives on microsoft.graph.fileAttachment, NOT on the base
+// microsoft.graph.attachment that $expand binds its nested $select against.
+// Selecting it returns 400 for the whole request, which silently broke every
+// Microsoft account's message sync from v0.1.0 until v0.1.19. If inline CID
+// image rendering is ever built, fetch contentId per-attachment via
+// /messages/{id}/attachments/{id}, which returns the full fileAttachment.
 const ATT_EXPAND =
-  '$expand=attachments($select=id,name,contentType,size,isInline,contentId)'
+  '$expand=attachments($select=id,name,contentType,size,isInline)'
 
 // ── Folder / message parsers ──────────────────────────────────────────────
 
