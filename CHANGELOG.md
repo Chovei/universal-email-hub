@@ -6,6 +6,17 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 
 ## [Unreleased]
 
+## [0.1.19] - 2026-08-09
+
+### 🐛 Fixes
+
+- **Outlook and Microsoft 365 accounts now actually download your email.** Every message sync for these accounts was failing against Microsoft's servers, which is why folders showed unread counts but opened empty. This affected every version since the first release
+- Fixed the folder toolbar text overlapping its buttons in a narrow message list
+- An account that cannot sync any of its folders is now reported as an error in Settings → Account Health instead of appearing connected
+- The "Live" badge no longer flickers off during each sync
+- Fixed a crash when quitting the app with IMAP accounts connected
+- Faster Outlook syncing — message pages no longer carry unused header data
+
 ## [0.1.18] - 2026-07-12
 
 ### 🐛 Fixes
@@ -178,7 +189,8 @@ This project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html) 
 - GitHub Actions release workflow (tag-triggered: typecheck → test → package → publish)
 - Strict security model: `contextIsolation`, `sandbox`, strict CSP, Zod-validated IPC, `safeStorage` token encryption
 
-[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.18...HEAD
+[Unreleased]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.19...HEAD
+[0.1.19]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.18...v0.1.19
 [0.1.18]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.17...v0.1.18
 [0.1.17]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.16...v0.1.17
 [0.1.16]: https://github.com/Fatexxp/universal-email-hub/compare/v0.1.15...v0.1.16
